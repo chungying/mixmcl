@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+
+<launch>
+  <arg name="suffix" default=""/>
+  <node name="argfind" pkg="mixmcl" type="roscheck" args="$(find mixmcl)/$(arg suffix)" output="screen"/>
+
+</launch>

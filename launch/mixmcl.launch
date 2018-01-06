@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<launch>
+  <env name="ROSCONSOLE_CONFIG_FILE" 
+     value="$(find mixmcl)/custom_rosconsole.conf"/>
+  <arg name="scan_topic" default="/p3dx/laser/scan"/>
+  <arg name="init_x" default="-9" />
+  <arg name="init_y" default="8.4" />
+  <arg name="init_a" default="0" />
+  <arg name="launch-prefix" default="" />
+
+  <node pkg="mixmcl" type="mixmcl" name="mixmcl" output="screen" launch-prefix="$(arg launch-prefix)">
+    <remap from="scan" to="$(arg scan_topic)" />
+    <rosparam command="load" file="$(find mixmcl)/yaml/amcl.yaml"/>
+    <param name="initial_pose_x" value="$(arg init_x)"/>
+    <param name="initial_pose_y" value="$(arg init_y)"/>
+    <param name="initial_pose_a" value="$(arg init_a)"/>
+    <!--param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-05-140804-param.txt"/-->
+    <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-05-234620-param.txt"/>
+    <!--param name="" value=""/>
+    <param name="" value=""/>
+    <param name="" value=""/-->
+  </node>
+  <node name="argfind" pkg="mixmcl" type="roscheck" args="$(find mixmcl)/data/2018-01-05-140804-param.txt" output="screen"/>
+</launch>
