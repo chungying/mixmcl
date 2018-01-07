@@ -3,7 +3,7 @@
 #include <io/paramio.h>
 #include <io/dataio.h>
 
-#include "mixmcl/kcgrid.h"
+#include "mixmcl/KCGrid.h"
 using namespace std;
 
 //basic fstream write and read.

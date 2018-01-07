@@ -44,10 +44,10 @@ catkin_package(
     nav_msgs
     std_srvs
   INCLUDE_DIRS include
-  LIBRARIES mcl mixmcl_tool
+  LIBRARIES mcl dualmcl_tool mixmcl_node amcl_node 
 )
 
-##include dirrectories
+##include dirrectories##
 include_directories(
   include src
 )
@@ -59,123 +59,134 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
 )
 
+##Build libraries##
 add_library(mcl
-  src/mcl/mcl.cpp
+  src/mcl/MCL.cpp
 )
-
 target_link_libraries(mcl
   ${amcl_LIBRARIES}
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
 )
 
-add_library(mixmcl_tool
-##definition of class MixmclNode 
-  src/mixmcl/mixmcl.cpp
-##IO definition for recording robot poses and laser features
-  src/io/paramio.cpp
-  src/io/dataio.cpp
-##definition of class SamplingNode for collecting sampling pose and laser features
-  src/mixmcl/sampling.cpp
-##definition of class KCGrid for build density trees
-  src/mixmcl/kcgrid.cpp
+add_library(mixmcl_node
+  #definition of class MixmclNode 
+  src/mixmcl/MixmclNode.cpp
+  src/amcl/pf/pf_resample.cpp
 )
-
-target_link_libraries(mixmcl_tool
+message(STATUS "amcl_LIBRARIES is ${amcl_LIBRARIES}")
+target_link_libraries(mixmcl_node
   ${amcl_LIBRARIES}
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
   ${nuklei_LIBRARIES}
+  mcl dualmcl_tool
+)
+
+add_library(amcl_node
+  src/amcl/AmclNode.cpp
+)
+target_link_libraries(amcl_node
+  ${amcl_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
   mcl
 )
 
-add_executable(pcd_write_test 
-  src/pcd_write.cpp)
-target_link_libraries(pcd_write_test
+add_library(dualmcl_tool
+  #IO definition for recording robot poses and laser features
+  src/io/paramio.cpp
+  src/io/dataio.cpp
+  #definition of class SamplingNode for collecting sampling pose and laser features
+  src/mixmcl/SamplingNode.cpp
+  #definition of class KCGrid for build density trees
+  src/mixmcl/KCGrid.cpp
+)
+target_link_libraries(dualmcl_tool
+  ${amcl_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
+  ${nuklei_LIBRARIES}
   ${PCL_COMMON_LIBRARIES}
-  ${PCL_IO_LIBRARIES}
+  mcl
 )
 
+message(STATUS "nuklei_LIBRARIES is ${nuklei_LIBRARIES}")
+message(STATUS "PCL_COMMON_LIBRARIES is ${PCL_COMMON_LIBRARIES}")
+##Build executables##
 add_executable(iotest
   src/iotest.cpp
 )
-
 target_link_libraries(iotest
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
   ${nuklei_LIBRARIES}
   ${PCL_COMMON_LIBRARIES}
-  mixmcl_tool
+  dualmcl_tool
 )
 
-add_executable(bo
-  src/boostoptional.cpp
-)
-
-target_link_libraries(bo
-  ${catkin_LIBRARIES}
-  ${BOOST_LIBRARIES}
-)
-
-## roscheck for shell scripts
 add_executable(roscheck
   src/roscheck.cpp
 )
-
 target_link_libraries(roscheck
   ${catkin_LIBRARIES}
 )
 
-## amcl_node
 add_executable(amcl
-  src/amcl_node.cpp
-  src/amcl/amcl.cpp
+  src/amcl.cpp
 )
-
 target_link_libraries(amcl
   ${amcl_LIBRARIES}
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
-  mcl
+  mcl amcl_node
 )
  
-## mixmcl_node
-add_executable(${PROJECT_NAME}
-  src/mixmcl_node.cpp
+add_executable(mixmcl
+  src/mixmcl.cpp
 )
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(mixmcl
   ${amcl_LIBRARIES}
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
   ${nuklei_LIBRARIES}
-  mcl mixmcl_tool
+  mcl mixmcl_node dualmcl_tool
 )
 
-## buildKDT
 add_executable(buildKDT
   src/buildKDT.cpp
 )
-
 target_link_libraries(buildKDT
   ${amcl_LIBRARIES}
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
   ${nuklei_LIBRARIES}
-  mcl mixmcl_tool
+  mcl dualmcl_tool
+)
+
+add_executable(dual
+  src/dual.cpp
+)
+target_link_libraries(dual
+  ${amcl_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
+  ${nuklei_LIBRARIES}
+  mcl mixmcl_node dualmcl_tool
 )
 
 install( TARGETS
-    ${PROJECT_NAME} amcl buildKDT iotest pcd_write_test roscheck bo
+    mixmcl amcl buildKDT iotest roscheck dual
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 install( TARGETS
-    mcl mixmcl_tool
+    mcl dualmcl_tool 
     LIBRARY DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-#message(STATUS "CATKIN_PACKAGE_INCLUDE_DESTINATION is ${CATKIN_PACKAGE_INCLUDE_DESTINATION}")
-install(DIRECTORY include 
+message(STATUS "CATKIN_PACKAGE_INCLUDE_DESTINATION is ${CATKIN_PACKAGE_INCLUDE_DESTINATION}")
+install(DIRECTORY include
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
 

@@ -6,7 +6,7 @@
 // roscpp
 #include "ros/ros.h"
 
-#include "mixmcl/sampling.h"
+#include "mixmcl/SamplingNode.h"
 boost::shared_ptr<SamplingNode> node_ptr;
 
 void sigintHandler(int sig)

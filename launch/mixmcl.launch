@@ -20,5 +20,4 @@
     <param name="" value=""/>
     <param name="" value=""/-->
   </node>
-  <node name="argfind" pkg="mixmcl" type="roscheck" args="$(find mixmcl)/data/2018-01-05-140804-param.txt" output="screen"/>
 </launch>

@@ -27,6 +27,7 @@
 *.sql
 *.sqlite
 *.bin
+*.bak
 
 # OS generated files #
 ######################

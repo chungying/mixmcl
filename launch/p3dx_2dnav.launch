@@ -3,7 +3,8 @@
 <launch>
   <env name="ROSCONSOLE_CONFIG_FILE" 
      value="$(find mixmcl)/config/custom_rosconsole.conf"/>
-  <arg name="gui" default="true"/>
+  <arg name="gazebo" default="false"/>
+  <arg name="rviz" default="true"/>
   <arg name="init_x" default="-9" />
   <arg name="init_y" default="8.4" />
   <arg name="init_a" default="0" />
@@ -24,7 +25,7 @@
 
   <!--P3DX in GAZEBO-->
   <include file="$(find p3dx_gazebo)/launch/gazebo.launch">
-    <arg name="gui" value="$(arg gui)"/>
+    <arg name="gui" value="$(arg gazebo)"/>
     <arg name="init_x" value="$(arg init_x )"/>
     <arg name="init_y" value="$(arg init_y )"/>
     <arg name="init_a" value="$(arg init_a )"/>
@@ -40,7 +41,7 @@
   </include>
 
   <!--RVIZ-->
-  <include file="$(find p3dx_description)/launch/rviz.launch" unless="$(arg gui)">
+  <include file="$(find p3dx_description)/launch/rviz.launch" if="$(arg rviz)">
     <arg name="rviz_node_args" value="-d $(find p3dx_2dnav)/config/p3dx_2dnav.rviz"/>
   </include> 
 
