@@ -1,8 +1,5 @@
-#include <algorithm>
-#include <cctype>
 #include "io/paramio.h"
 using namespace std;
-//using namespace paramio;
 namespace paramio
 {
 
@@ -15,6 +12,7 @@ namespace paramio
     dataCount_()
   {
     //TODO check if ifs_ptr_ is ok?
+    
   }
   
   ParamIn::~ParamIn()

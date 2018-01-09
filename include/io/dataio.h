@@ -23,7 +23,7 @@ namespace dataio
       DataIn(const string& filename);
       ~DataIn();
       bool readALine(pf_vector_t& pose, laser_feature_t& feature);
-      void test();
+      void test(ostream& out);
     protected:
       int dataCount_;
       boost::scoped_ptr<ifstream> ifs_ptr_;

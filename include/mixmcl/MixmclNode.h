@@ -20,12 +20,12 @@ class MixmclNode : public MCL<MixmclNode>
     void GLCB()
     {
       ROS_INFO("MixmclNode::GLCB() is called. Build density tree..");
-      build_density_tree();
+      buildDensityTree();
     };
     void AIP()
     {
       ROS_INFO("MixmclNode::AIP() is called. Build density tree..");
-      build_density_tree();
+      buildDensityTree();
     };
     virtual void RCCB();
 
@@ -40,14 +40,14 @@ class MixmclNode : public MCL<MixmclNode>
     ros::Publisher particlecloud2_pub_;
     dynamic_reconfigure::Server<mixmcl::MIXMCLConfig> *dsrv2_;
     mixmcl::MIXMCLConfig default_config2_;
-    void build_density_tree();
-    void mixtureProposals();
-    void combineSets();
-    void publishCloud2();
-    void convertKCGrid();
+    void buildDensityTree();//build a KernelCollection based on previous weighted set for evaluating current dual set
+    void mixtureProposals();//determin the size of dual set and regular set
+    void combineSets();//combining dual set and regular set
+    void publishCloud2();//publish the particles drawn from a kdtree of KernelCollection wrt current laser feature
+    void createKCGrid();//read data from binary file and create a discrete KernelCollection grid
     void reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level);
-    static inline void se3ToPose(const nuklei::kernel::se3& se3_p, pf_vector_t& p);
-    static inline void poseToSe3(const pf_vector_t& p, nuklei::kernel::se3& se3_p);
+    static inline void se3ToPose(const nuklei::kernel::se3& se3_p, pf_vector_t& vec_p);
+    static inline void poseToSe3(const pf_vector_t& vec_p, nuklei::kernel::se3& se3_p);
 
 };
 
@@ -70,9 +70,8 @@ MixmclNode::se3ToPose(const nuklei::kernel::se3& se3_p, pf_vector_t& vec_p)
   vec_p.v[1] = se3_p.loc_.Y();
   nuklei::Matrix3 mat;
   se3_p.ori_.ToRotationMatrix(mat);
-  nuklei::coord_t ax, ay, az;
-  //TODO check the order ZYX
+  double ax, ay, az;
   mat.ExtractEulerZYX(az, ay, ax);
-  vec_p.v[2] = (double)az;
+  vec_p.v[2] = az;
 }
 

@@ -214,11 +214,12 @@ void KCGrid::convert(map<string, any>& m)
   }
   if(data_count_ == 0)
   {
-    datain_ptr_->test();
-    string err_msg("KCGrid::convert(map<string, any>) cannot read binary data named \"");
-    err_msg += datafilename;
-    err_msg += '\"';
-    throw ios_base::failure(err_msg);
+    stringstream ss;
+    datain_ptr_->test(ss);
+    ss << "KCGrid::convert(map<string, any>) cannot read binary data named \"";
+    ss << datafilename;
+    ss << '\"' << endl;
+    throw ios_base::failure(ss.str());
   }
 
   data_matrix_.reset( new float[3*tree_map_.size()]);

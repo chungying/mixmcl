@@ -131,16 +131,6 @@ MCL<D>::MCL() :
 
   tfb_ = new tf::TransformBroadcaster();
   tf_ = new TransformListenerWrapper();
-//TODO avoid this in template class
-  //laser_scan_filter_ = 
-  //  new tf::MessageFilter<sensor_msgs::LaserScan>(
-  //            *laser_scan_sub_, 
-  //            *tf_, 
-  //            odom_frame_id_, 
-  //            100);
-  //D* dptr = static_cast<D*>(this);
-  //laser_scan_filter_->registerCallback( boost::bind(&D::laserReceived, dptr, _1));
-
   dsrv_ = new dynamic_reconfigure::Server<amcl::AMCLConfig>(ros::NodeHandle("~"));
   dynamic_reconfigure::Server<amcl::AMCLConfig>::CallbackType cb = boost::bind(&MCL<D>::reconfigureCB, this, _1, _2);
   dsrv_->setCallback(cb);
@@ -607,7 +597,7 @@ MCL<D>::runFromBag(const std::string &in_bag_fn)
   bag.open(in_bag_fn, rosbag::bagmode::Read);
   std::vector<std::string> topics;
   topics.push_back(std::string("tf"));
-  std::string scan_topic_name = "base_scan"; // TODO determine what topic this actually is from ROS
+  std::string scan_topic_name = "base_scan"; 
   topics.push_back(scan_topic_name);
   rosbag::View view(bag, rosbag::TopicQuery(topics));
 

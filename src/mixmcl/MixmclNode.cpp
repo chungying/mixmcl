@@ -35,11 +35,10 @@ MixmclNode::MixmclNode() :
     ROS_INFO("SamplingNode::SamplingNode() is going to read the parameter %s", sample_param_filename_.c_str());
   }
 
-  //TODO how to set the normalizer?
   if(!private_nh_.searchParam("dual_normalizer_ita", param_key_name))
-    private_nh_.param("dual_normalizer_ita", ita_, 0.0000001);
+    private_nh_.param("dual_normalizer_ita", ita_, 0.001);
   else
-    private_nh_.param(param_key_name.c_str(), ita_, 0.0000001);
+    private_nh_.param(param_key_name.c_str(), ita_, 0.001);
 
   if(!private_nh_.searchParam("mixing_rate", param_key_name))
     private_nh_.param("mixing_rate", mixing_rate_, 0.1);
@@ -56,7 +55,7 @@ MixmclNode::MixmclNode() :
   else
     private_nh_.param(param_key_name.c_str(), orih_, 0.5);
 
-  convertKCGrid();
+  createKCGrid();
 /////////////////end Dual MCL//////////////////
   if(laser_scan_filter_!=NULL)
     delete laser_scan_filter_;
@@ -78,13 +77,13 @@ MixmclNode::MixmclNode() :
   dsrv2_->setCallback(cb2);
 
   if(!kdt_)
-    build_density_tree();
+    buildDensityTree();
 }
 
 void MixmclNode::RCCB()
 {
   ROS_INFO("MixmclNode::RCCB() is called. Build density tree..");
-  build_density_tree();
+  buildDensityTree();
   delete laser_scan_filter_;
   laser_scan_filter_ = 
           new tf::MessageFilter<sensor_msgs::LaserScan>(*laser_scan_sub_, 
@@ -98,19 +97,18 @@ void MixmclNode::RCCB()
 void MixmclNode::reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level)
 {
   boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
-  //we don't want to do anything on the first call
-  //which corresponds to startup
+  //do buildDensityTree on the first call
+  //which corresponds to startup dsrv2_->setCallback(cb2)
   if(first_reconfigureCB2_call_)
   {
     ROS_INFO("first reconfigureCB2. Build density tree...");
-    build_density_tree();
+    buildDensityTree();
     first_reconfigureCB2_call_ = false;
     default_config2_ = config;
     return;
   }
-  //reconfigure the mixing rate
 /////////////////////Dual MCL//////////////////
-  //initialize kdtrees for sampling pose of dual MCL
+  //reconfigure the mixing rate
   ROS_INFO("MixmclNode::reconfigureCB2(...)");
   ita_ = config.dual_normalizer_ita;
   mixing_rate_ = config.mixing_rate;
@@ -125,7 +123,7 @@ void MixmclNode::reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level)
     fxres_ = config.feature_resolution_x;
     fyres_ = config.feature_resolution_y;
     fdres_ = config.feature_resolution_d;
-    convertKCGrid();
+    createKCGrid();
   }
 /////////////////end Dual MCL//////////////////
 }
@@ -211,7 +209,7 @@ void MixmclNode::mixtureProposals()
 }
 
 void
-MixmclNode::convertKCGrid()
+MixmclNode::createKCGrid()
 {
   try
   { 
@@ -229,7 +227,7 @@ MixmclNode::convertKCGrid()
 }
 
 void 
-MixmclNode::build_density_tree()
+MixmclNode::buildDensityTree()
 {
   if(!kdt_)
     ROS_DEBUG("old kdt_ is NULL. Rebuilding density tree.");
@@ -315,11 +313,6 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   } else {
     // we have the laser pose, retrieve laser index
     laser_index = frame_to_laser_[laser_scan->header.frame_id];
-    ROS_DEBUG("Received laser's pose wrt robot:"// %.3f %.3f %.3f",
-             // lasers_[laser_index]->laser_pose.v[0],
-             // lasers_[laser_index]->laser_pose.v[1],
-             // lasers_[laser_index]->laser_pose.v[2]
-              );
   }
 
   // Where was the robot when this scan was taken?
@@ -524,12 +517,13 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     //Finally, combine the set together
     combineSets();
     //Build the density tree based on the weighted particles
-    build_density_tree();
+    buildDensityTree();
 ///////////////////////////////////////////////
     double total = dual_set_total + regular_set_total;
     pf_sample_set_t* set = pf_->sets + pf_->current_set;
     double w_avg = pf_normalize(set, total);
-    pf_update_augmented_weight(pf_, w_avg);//TODO useless
+    //useless
+    //pf_update_augmented_weight(pf_, w_avg);
     lasers_update_[laser_index] = false;
 
     pf_odom_pose_ = pose;
@@ -538,9 +532,7 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     if(!(++resample_count_ % resample_interval_) || 
         (force_publication ==true && sent_first_transform_ == false))
     {
-      //TODO instantiate pf_update_resample_pure_KLD(pf_);
       pf_update_resample_pure_KLD(pf_);
-      //pf_update_resample_low_variance(pf_);
       resampled = true;
     }
 
@@ -601,12 +593,6 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
                 hyps[max_weight_hyp].pf_pose_mean.v[1],
                 hyps[max_weight_hyp].pf_pose_mean.v[2]);
 
-      /*
-         puts("");
-         pf_matrix_fprintf(hyps[max_weight_hyp].pf_pose_cov, stdout, "%6.3f");
-         puts("");
-       */
-
       geometry_msgs::PoseWithCovarianceStamped p;
       // Fill in the header
       p.header.frame_id = global_frame_id_;
@@ -632,17 +618,6 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       // covariance for the highest-weight cluster
       //p.covariance[6*5+5] = hyps[max_weight_hyp].pf_pose_cov.m[2][2];
       p.pose.covariance[6*5+5] = set->cov.m[2][2];
-
-      /*
-         printf("cov:\n");
-         for(int i=0; i<6; i++)
-         {
-         for(int j=0; j<6; j++)
-         printf("%6.3f ", p.covariance[6*i+j]);
-         puts("");
-         }
-       */
-
       pose_pub_.publish(p);
       last_published_pose = p;
 

@@ -70,12 +70,6 @@ void DualNode::RCCB()
 
 void DualNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 {
-/*TODO checking the variables
-  laser_ is created in handleMapMessage
-  lasers_ 
-  laser_index
-  
-*/
   boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
   int laser_index = -1;
   if(frame_to_laser_.find(laser_scan->header.frame_id) == frame_to_laser_.end())

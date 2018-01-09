@@ -1,6 +1,0 @@
-<?xml version="1.0"?>
-
-<launch>
-  <node name="testenv" pkg="mixmcl" type="testenv.sh" args="$(env TEST_ENV)" output="screen"/>
-  <node name="testenv1" pkg="mixmcl" type="testenv1.sh" args="$(env TEST_ENV)" output="screen"/>
-</launch>

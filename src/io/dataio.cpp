@@ -19,7 +19,7 @@ namespace dataio
       ifs_ptr_->close();
   }
 
-  void DataIn::test()
+  void DataIn::test(ostream& out)
   {
     ifs_ptr_->seekg(0, ios_base::end);
     int length = ifs_ptr_->tellg();
@@ -29,12 +29,12 @@ namespace dataio
     while(count <length)
     {
       (*ifs_ptr_) >> d;
-      cout << d << ' ';
+      //out << d << ' ';
       ++count;
-      if(count % 6 == 5)
-        cout << endl;
+      //if(count % 6 == 5)
+      //  out << endl;
     }
-    cout << "file size: " << length << ", read: " << count << endl;
+    out << "file size: " << length << ", read: " << count << endl;
   }
 
   bool DataIn::readALine(pf_vector_t& pose, laser_feature_t& feature)
@@ -43,11 +43,9 @@ namespace dataio
     double line[s];
     if(!ifs_ptr_->read( (char *)line, s * sizeof(double)))
     {
-      //when something wrong happens
-      cout << "DataIn::readALine cannot read anymore." << endl;
-      cout << "DataIn::datacout_ is " << dataCount_ << endl;
-      cout << "DataIn::ifs_ptr_->gcount() is " << ifs_ptr_->gcount() << " data." << endl;
-      //return false
+      //cout << "DataIn::readALine cannot read anymore." << endl;
+      //cout << "DataIn::datacount_ is " << dataCount_ << endl;
+      //cout << "DataIn::ifs_ptr_->gcount() is " << ifs_ptr_->gcount() << " data." << endl;
       return false;
     }
     pose.v[0] = line[0];
