@@ -390,6 +390,7 @@ MCL<D>::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
     for(int j = 0; j < map_->size_y; j++)
       if(map_->cells[MAP_INDEX(map_,i,j)].occ_state == -1)
         MCL::free_space_indices.push_back(std::make_pair(i,j));
+  ROS_INFO("free_space_indices.size() is %ld\n", MCL::free_space_indices.size());
 #endif
   // Create the particle filter
   pf_ = pf_alloc(min_particles_, max_particles_,

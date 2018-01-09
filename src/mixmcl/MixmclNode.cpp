@@ -177,7 +177,7 @@ void MixmclNode::combineSets()
   set_b->sample_count = 0;
 }
 
-//move samples from set_a with probability of 1-phi into set_b
+//move regular MCL samples in set_a with probability of 1-phi into set_b
 void MixmclNode::mixtureProposals()
 {
   pf_sample_set_t* set_a = pf_->sets + pf_->current_set;
@@ -375,6 +375,11 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     force_publication = true;
 
     resample_count_ = 0;
+
+    // using mixing_rate_ to seperate current set into two sets,
+    // current set for regular MCL and another set for dual MCL
+    mixtureProposals();
+
   }
   // If the robot has moved, update the filter
   else if(pf_init_ && lasers_update_[laser_index])
@@ -460,7 +465,7 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
               (i * angle_increment);
     }
 
-    lasers_[laser_index]->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
+    double regular_set_total = lasers_[laser_index]->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
 
 /////////////////////Dual MCL//////////////////
     //Now, evaluation of regualr MCL has been performed for current set.
@@ -497,6 +502,7 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     odom_->UpdateAction(pf_, (amcl::AMCLSensorData*)&inverse_odata);
     //Third, calculate importance factors for these samples.
     pf_sample_t* dual_sample;
+    double dual_set_total = 0;
     //KernelCollection samplesForEval;
     for(int i = 0 ; i < set_dualmcl->sample_count ; ++i)
     {
@@ -508,6 +514,7 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       MixmclNode::poseToSe3(vec_pose, se3_pose);
       dual_sample->weight = kdt_->evaluationAt(se3_pose);
       dual_sample->weight *= ita_;
+      dual_set_total += dual_sample->weight;
     }
 
     pf_->current_set = (pf_->current_set + 1) % 2;
@@ -519,21 +526,25 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     //Build the density tree based on the weighted particles
     build_density_tree();
 ///////////////////////////////////////////////
+    double total = dual_set_total + regular_set_total;
+    pf_sample_set_t* set = pf_->sets + pf_->current_set;
+    double w_avg = pf_normalize(set, total);
+    pf_update_augmented_weight(pf_, w_avg);//TODO useless
     lasers_update_[laser_index] = false;
 
     pf_odom_pose_ = pose;
 
     // Resample the particles
-    if(!(++resample_count_ % resample_interval_))
+    if(!(++resample_count_ % resample_interval_) || 
+        (force_publication ==true && sent_first_transform_ == false))
     {
       //TODO instantiate pf_update_resample_pure_KLD(pf_);
-      //pf_update_resample(pf_);
-//      pf_update_resample_pure_KLD(pf_);
-      pf_update_resample_low_variance(pf_);
+      pf_update_resample_pure_KLD(pf_);
+      //pf_update_resample_low_variance(pf_);
       resampled = true;
     }
 
-    pf_sample_set_t* set = pf_->sets + pf_->current_set;
+    set = pf_->sets + pf_->current_set;
     ROS_DEBUG("Num samples: %d\n", set->sample_count);
     // Publish the resulting cloud
     if (!m_force_update) 

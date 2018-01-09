@@ -48,6 +48,7 @@ void pf_update_resample_low_variance(pf_t* pf)
     // Add sample to histogram
     pf_kdtree_insert(set_b->kdtree, sample_b->pose, sample_b->weight);
   }
+  set_a->sample_count = 0;
   // Normalize weights
   for (i = 0; i < set_b->sample_count; i++)
   {
@@ -123,6 +124,7 @@ void pf_update_resample_pure_KLD(pf_t* pf)
     if (set_b->sample_count > pf_resample_limit(pf, set_b->kdtree->leaf_count))
       break;
   }
+  set_a->sample_count = 0;
  
   // Normalize weights
   for (i = 0; i < set_b->sample_count; i++)

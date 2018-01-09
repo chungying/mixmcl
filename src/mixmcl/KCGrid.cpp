@@ -4,6 +4,19 @@ using namespace boost;
 using namespace std;
 using namespace paramio;
 using namespace dataio;
+
+void KCGrid::testPrint( int i )
+{
+  if(tree_map_.find(i) == tree_map_.end())
+  {
+    cout << i << "-th tree has no data." << endl;
+  }
+  else
+  {
+    cout << i << "-th tree has "  << tree_map_[i]->size() << " data." << endl;
+  }
+}
+
 KCGrid::KCGrid(size_t X, size_t Y, size_t D, string& para_file)
 :X(X), Y(Y), D(D), max_size_(X*Y*D), data_count_(0)
 {
@@ -52,11 +65,11 @@ inline void KCGrid::VI2GI(size_t index, vector<size_t>& gi)
 inline size_t KCGrid::GI2VI(size_t x, size_t y, size_t d)
 {
   size_t idx = x*Y*D + y*D + d;
-  //vector<size_t> gi;
-  //VI2GI(idx, gi);
-  //assert(gi[0]==x);
-  //assert(gi[1]==y);
-  //assert(gi[2]==d);
+  vector<size_t> gi;
+  VI2GI(idx, gi);
+  assert(gi[0]==x);
+  assert(gi[1]==y);
+  assert(gi[2]==d);
   if(idx >= max_size_)
   {
     stringstream ss;
@@ -192,7 +205,7 @@ void KCGrid::convert(map<string, any>& m)
     k.ori_.Z() = v.z();
     k.setWeight(1);
     // add the kernel to the tree corresponding to  features
-    idx = C2VI(f.x, f.y, f.dist);
+    idx = C2VI((float)(f.x), (float)(f.y), (float)(f.dist));
     if(tree_map_.find(idx) == tree_map_.end())
       tree_map_.insert(
         make_pair(
@@ -228,6 +241,7 @@ void KCGrid::convert(map<string, any>& m)
     //for building a kdtree for nn search
     gridcell_indices_.push_back(it->first);
     VI2GI(it->first, temp_vec);
+    assert(it->first == GI2VI(temp_vec[0], temp_vec[1], temp_vec[2]));
     temp_ptr[0] = disc2cont(temp_vec[0], xlim, X);
     temp_ptr[1] = disc2cont(temp_vec[1], ylim, Y);
     temp_ptr[2] = disc2cont(temp_vec[2], dlim, D);
@@ -284,9 +298,16 @@ size_t KCGrid::nnSearch(float x, float y, float d, ostream& out)
   out << ", distances: ";
   for(int i = 0 ; i < k_distances_.size() ; ++i)
     out << k_distances_[i] << " ";
-  float* ptr = data_matrix_.get() + 3*k_indices_[0];
-  out << ", nearest pose: (" << ptr[0] << ' ' << ptr[1] << ' ' << ptr[2] << ")" << endl;
-  assert(gridcell_indices_[k_indices_[0]] == GI2VI(ptr[0], ptr[1], ptr[2]));
+  //float* ptr = data_matrix_.get() + 3*k_indices_[0];
+  float xnn = *(data_matrix_.get() + 3*k_indices_[0]);
+  float ynn = *(data_matrix_.get() + 3*k_indices_[0] + 1);
+  float dnn = *(data_matrix_.get() + 3*k_indices_[0] + 2);
+  //out << ", nearest pose: (" << ptr[0] << ' ' << ptr[1] << ' ' << ptr[2] << ")" << endl;
+  size_t gvi = gridcell_indices_[k_indices_[0]];
+  size_t cvi = C2VI(xnn, ynn, dnn);
+  out << ", nearest pose: (" << xnn << ' ' << ynn << ' ' << dnn << "), gvi: " << gvi << ", cvi: " << cvi << endl;
+  //assert(gridcell_indices_[k_indices_[0]] == GI2VI(ptr[0], ptr[1], ptr[2]));
+  //assert(cvi==gvi);
   return gridcell_indices_[k_indices_[0]];
 }
 

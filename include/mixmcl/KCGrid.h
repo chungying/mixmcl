@@ -32,6 +32,7 @@ class KCGrid
     typedef std::map<size_t, ConstTreePtr> ConstTreeMap;
     typedef ::flann::L2_Simple<float> Dist;
     typedef ::flann::Index<Dist> FLANNIndex;
+    void testPrint( int i );
 
     KCGrid(size_t X, size_t Y, size_t D, std::string& para_file);
 

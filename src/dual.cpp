@@ -3,6 +3,7 @@
 // roscpp
 #include "ros/ros.h"
 #include <mixmcl/MixmclNode.h>
+#include <sstream>
 using namespace std;
 using namespace nuklei;
 
@@ -183,7 +184,9 @@ void DualNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 
   //convert ldata to features, x, y, and dist.
   laser_feature_t feature = polygonCentroid(ldata);
-  boost::shared_ptr<const KernelCollection> tree = kcgrid_->getTree(feature.x, feature.y, feature.dist);
+  std::stringstream ss;
+  boost::shared_ptr<const KernelCollection> tree = kcgrid_->getTree(feature.x, feature.y, feature.dist, ss);
+  ROS_DEBUG_STREAM(ss);
   KernelCollection::const_iterator iter = tree->begin();
   KernelCollection::const_iterator end = tree->end();
   geometry_msgs::PoseArray cloud_msg;

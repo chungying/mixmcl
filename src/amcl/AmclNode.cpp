@@ -232,7 +232,10 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
               (i * angle_increment);
     }
 
-    lasers_[laser_index]->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
+    double total = lasers_[laser_index]->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
+    pf_sample_set_t* set = pf_->sets + pf_->current_set;
+    double w_avg = pf_normalize(set, total);
+    pf_update_augmented_weight(pf_, w_avg);
 
     lasers_update_[laser_index] = false;
 
@@ -245,7 +248,7 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       resampled = true;
     }
 
-    pf_sample_set_t* set = pf_->sets + pf_->current_set;
+    set = pf_->sets + pf_->current_set;
     ROS_DEBUG("Num samples: %d\n", set->sample_count);
 
     // Publish the resulting cloud
