@@ -8,15 +8,22 @@
 #include "io/dataio.h"
 #include "io/paramio.h"
 
-//class SamplingNode : public MixmclNode
 class SamplingNode : public MCL<SamplingNode>
 {
   friend class MCL;
   public:
     SamplingNode();
     ~SamplingNode();
-    void moveRobotUniformly();
-    
+    void sampling();
+    static void raycasting(
+      amcl::AMCLLaser* self,
+      const pf_vector_t rpose, 
+      const int range_count,
+      const double range_max,
+      const double range_min,
+      const double angle_min,
+      const double angle_increment,
+      amcl::AMCLLaserData& ldata);
 
   protected:
     //implement virtual functions
@@ -35,9 +42,9 @@ class SamplingNode : public MCL<SamplingNode>
     boost::scoped_ptr<dataio::DataOut> dataout_ptr_;
     boost::scoped_ptr<paramio::ParamOut> paramout_ptr_;
 
-    int max_data_count;
     //for param.txt
-    int dataCount;
+    int data_count_;
+    int lrnum;//number of laser beams 
     double noise;//laser_noise got from ParamServer
     double lrmin;//minimum laser range
     double lrmax;//maximum laser range
@@ -50,22 +57,12 @@ class SamplingNode : public MCL<SamplingNode>
     double fymax;//maximum y laser feature
     double fdmin;//minimum distance laser feature
     double fdmax;//maximum distance laser feature
-    void convertKCGrid(){};
-    bool initFlag;
-    bool randomSucceed;
-    bool laserUpdated;
-    ros::ServiceClient cli_;// SetModelState client
-    std::string srv_name;
-    gazebo_msgs::ModelState state;
-    laser_feature_t curFeature;
-    pf_vector_t pose;    
-    std::string modelName;
-    std::string refFrame;
 
+    int max_data_count_;
+    bool laserUpdated;
 };
 
 const static std::string fp = "/fullpath";
 const static std::string ts = "/timestamp";
-
 
 #endif //SAMPLING_H

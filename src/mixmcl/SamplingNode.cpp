@@ -2,22 +2,63 @@
 #include "mcl/MCL.cpp"
 template class MCL<SamplingNode>;
 
+void SamplingNode::raycasting(
+    amcl::AMCLLaser* self,
+    const pf_vector_t rpose, 
+    const int range_count,
+    const double range_max,
+    const double range_min,
+    const double angle_min,
+    const double angle_increment,
+    amcl::AMCLLaserData& ldata)
+{
+  // 2.3 laser sensor information
+  //angle_min lamin
+  //angle_max lamax
+  //angle_increment lares
+  //range_min lrmin
+  //range_max lrmax
+  //range_count lrnum
+  ldata.range_count = range_count;
+  ldata.range_max = range_max;
+
+  // 2.2 retreive occupancy grid map
+  // self->map
+  ldata.sensor = self;
+  // Take account of the laser pose relative to the robot
+  pf_vector_t lpose = pf_vector_coord_add(self->laser_pose, rpose);
+  // 2.4 ray-casting for each beam
+  ldata.ranges = new double[ldata.range_count][2];
+  double map_range;
+  for (int i = 0; i < ldata.range_count; ++i)
+  {
+    ldata.ranges[i][1] = angle_min + (i * angle_increment);
+    // Compute the range according to the map
+    map_range = map_calc_range(
+                  self->map, 
+                  lpose.v[0], 
+                  lpose.v[1],
+                  lpose.v[2] + ldata.ranges[i][1], 
+                  range_max);
+    if(map_range <= range_min || map_range > range_max)
+      ldata.ranges[i][0] = range_max;
+    else
+      ldata.ranges[i][0] = map_range;
+  }
+  // 2.5 return AMCLLaserData ldata
+}
+
 SamplingNode::SamplingNode():
   MCL(),
-  srv_name("/gazebo/set_model_state"),
-  modelName("p3dx"),
-  refFrame("world"),
-  initFlag(false),
-  randomSucceed(false),
   laserUpdated(false),
   dataout_ptr_(),
   paramout_ptr_(),
-  dataCount(0)
+  data_count_(0)
 {
    boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
   //one text file for storing parameters and data file name.
-  /*dataCount sampling number 
-  **laser noise TODO 
+  /*data_count_ sampling number 
+  **noise laser gaussian noise std dev
   **lrmin laser_min_range_
   **lrmax laser_max_range_
   **lares laser angle resolution
@@ -45,7 +86,7 @@ SamplingNode::SamplingNode():
   paramout_ptr_.reset( new paramio::ParamOut(output_filename_param_));
   if(!private_nh_.getParam("laser_noise", noise))
     noise = -1.0;
-  private_nh_.param("max_data_count", max_data_count, int(10000));
+  private_nh_.param("max_data_count", max_data_count_, int(10000));
   //reset callback function to SamplingNode::laserReceived(...)
   ROS_INFO("reset laserReceived callback function");
   laser_scan_filter_ = 
@@ -59,19 +100,6 @@ SamplingNode::SamplingNode():
                           &SamplingNode::laserReceived, 
                           this, 
                           _1));
-
-  //gazebo_msg::SetModelState
-  cli_ = nh_.serviceClient<gazebo_msgs::SetModelState>(srv_name);
-  geometry_msgs::Twist twist;
-  twist.linear.x = 0.0;
-  twist.linear.y = 0.0;
-  twist.linear.z = 0.0;
-  twist.angular.x = 0.0;
-  twist.angular.y = 0.0;
-  twist.angular.z = 0.0;
-  this->state.twist = twist;
-  this->state.model_name = this->modelName;
-  this->state.reference_frame = this->refFrame;
 }
 
 void
@@ -93,62 +121,57 @@ SamplingNode::RCCB()
                           _1));
 }
 
+/*
+1. random move
+2. ray-casting
+3. claculate feature
+4. record data
+*/
 void
-SamplingNode::moveRobotUniformly()
+SamplingNode::sampling()
 {
   boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
-  ROS_DEBUG("Execute SamplingNode::moveRobotUniformly()");
-  //if laser is updated and if uniform pose is successfully initialized.
-  if( randomSucceed && laserUpdated && initFlag)
+  if(!laserUpdated)
   {
-    ROS_DEBUG("store pose and features");
-    //store features and pose
-    pf_vector_t p4save = this->pose;
-    laser_feature_t f4save = this->curFeature;
-    /*ROS_INFO("rx: %f, ry: %f, rh: %f, lx: %f, ly: %f, ldist: %f", 
-              p4save.v[0],
-              p4save.v[1],
-              p4save.v[2],
-              f4save.x, 
-              f4save.y, 
-              f4save.dist);*/
-    this->dataCount++;
-    dataout_ptr_->writeALine(p4save, f4save);
-    laserUpdated = false;
-    randomSucceed = false;
-    //TODO
-    if(dataCount >= max_data_count)
-    {
-      ros::shutdown();
-    }
+    ROS_INFO("Doesn't receive any laser scan information. Waiting for 1 sec...");
+    ros::Duration(1).sleep();
+    return ;
   }
-
+  // 1. random move
   //uniformly generate a Pose
-  this->pose = MCL::uniformPoseGenerator((void*)map_);
-  geometry_msgs::Pose gp;
-  gp.position.x = pose.v[0];
-  gp.position.y = pose.v[1];
-  gp.position.z = 0;
-  tf::quaternionTFToMsg(tf::createQuaternionFromYaw(pose.v[2]),gp.orientation);
-  this->state.pose = gp;
-
-  gazebo_msgs::SetModelState setRobotModelPose;
-  setRobotModelPose.request.model_state = this->state;
-  if(cli_.call(setRobotModelPose))
+  pf_vector_t rpose = MCL::uniformPoseGenerator((void*)map_);
+  // 2. ray-casting
+  amcl::AMCLLaserData ldata;
+  SamplingNode::raycasting(lasers_[0], rpose, lrnum, lrmax, lrmin, lamin, lares, ldata);
+  // 3. claculate feature
+  //cache the features at the class member
+  laser_feature_t lfeat = polygonCentroid(ldata);
+  if(this->data_count_==0)
   {
-    //call service success
-    ROS_DEBUG("successfully call SetModelState.");
-    this->randomSucceed = true;
-    if(!initFlag)initFlag = true;
+    fxmin = lfeat.x; 
+    fxmax = lfeat.x; 
+    fymin = lfeat.y; 
+    fymax = lfeat.y; 
+    fdmin = lfeat.dist; 
+    fdmax = lfeat.dist;
   }
   else
   {
-    //call service fail
-    ROS_DEBUG("fail to call SetModelState.");
-    initFlag = false;//if the service failed, make initFlag false to avoid using pose and ldata
+    fxmin = std::min(fxmin, lfeat.x); 
+    fxmax = std::max(fxmax, lfeat.x); 
+    fymin = std::min(fymin, lfeat.y); 
+    fymax = std::max(fymax, lfeat.y); 
+    fdmin = std::min(fdmin, lfeat.dist); 
+    fdmax = std::max(fdmax, lfeat.dist);
   }
-  ROS_DEBUG("model: %s, reference_frame: %s", this->modelName.c_str(), this->refFrame.c_str());
-  ROS_DEBUG("generated pose: ( %.4f, %.4f, %.4f)", pose.v[0], pose.v[1], pose.v[2]);
+  // 4. record data
+  this->data_count_++;
+  dataout_ptr_->writeALine(rpose, lfeat);
+  if(data_count_ >= max_data_count_)
+  {
+    ros::shutdown();
+  }
+  return ;
 }
 
 void
@@ -161,7 +184,6 @@ SamplingNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     if( map_ == NULL ) {
       return;
     }
-    boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
     int laser_index = -1;
   
     // Do we have the base->base_laser Tx yet?
@@ -204,19 +226,12 @@ SamplingNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     } else {
       // we have the laser pose, retrieve laser index
       laser_index = frame_to_laser_[laser_scan->header.frame_id];
-      ROS_DEBUG("Received laser's pose wrt robot:"// %.3f %.3f %.3f",
-               // lasers_[laser_index]->laser_pose.v[0],
-               // lasers_[laser_index]->laser_pose.v[1],
-               // lasers_[laser_index]->laser_pose.v[2]
-                );
     }
-  
   
     //convert laser_scan into LaserData
     amcl::AMCLLaserData ldata;
     ldata.sensor = lasers_[laser_index];
     ldata.range_count = laser_scan->ranges.size();
-  
     // To account for lasers that are mounted upside-down, we determine the
     // min, max, and increment angles of the laser in the base frame.
     //
@@ -245,7 +260,6 @@ SamplingNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   
     // wrapping angle to [-pi .. pi]
     angle_increment = fmod(angle_increment + 5*M_PI, 2*M_PI) - M_PI;
-  
     ROS_DEBUG("Laser %d angles in base frame: min: %.3f inc: %.3f", laser_index, angle_min, angle_increment);
   
     // Apply range min/max thresholds, if the user supplied them
@@ -273,34 +287,13 @@ SamplingNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       ldata.ranges[i][1] = angle_min +
               (i * angle_increment);
     }
-    ROS_DEBUG("converting ldata into features"); 
-    //convert ldata into features
-    //cache the features at the class member
-    curFeature = polygonCentroid(ldata);
     //update parameters every single time because there is possibility for reconfiguration.
+    lrnum = laser_scan->ranges.size();
     lrmin = laser_scan->range_min;
     lrmax = laser_scan->range_max;
     lares = laser_scan->angle_increment;
     lamin = laser_scan->angle_min;
     lamax = laser_scan->angle_max;
-    if(!initFlag)
-    {
-      fxmin = curFeature.x; 
-      fxmax = curFeature.x; 
-      fymin = curFeature.y; 
-      fymax = curFeature.y; 
-      fdmin = curFeature.dist; 
-      fdmax = curFeature.dist;
-    }
-    else
-    {
-      fxmin = std::min(fxmin, curFeature.x); 
-      fxmax = std::max(fxmax, curFeature.x); 
-      fymin = std::min(fymin, curFeature.y); 
-      fymax = std::max(fymax, curFeature.y); 
-      fdmin = std::min(fdmin, curFeature.dist); 
-      fdmax = std::max(fdmax, curFeature.dist);
-    }
     laserUpdated = true;
   }
   catch(const tf::TransformException& ex)
@@ -316,7 +309,7 @@ SamplingNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 SamplingNode::~SamplingNode()
 {
   paramout_ptr_->writeALine(std::string("databinaryfile "), output_filename_data_);
-  paramout_ptr_->writeALine(std::string("datacount "), dataCount);
+  paramout_ptr_->writeALine(std::string("datacount "), data_count_);
   paramout_ptr_->writeALine(std::string("noise "), noise); 
   paramout_ptr_->writeALine(std::string("lrmin "), lrmin); 
   paramout_ptr_->writeALine(std::string("lrmax "), lrmax); 

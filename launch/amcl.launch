@@ -8,7 +8,7 @@
   <arg name="init_a" default="0" />
   <arg name="launch-prefix" default="" />
 
-  <node pkg="amcl" type="amcl" name="amcl" output="screen">
+  <node pkg="mixmcl" type="amcl" name="amcl" output="screen">
     <remap from="scan" to="$(arg scan_topic)" />
     <rosparam command="load" file="$(find mixmcl)/yaml/amcl.yaml"/>
     <param name="initial_pose_x" value="$(arg init_x)"/>

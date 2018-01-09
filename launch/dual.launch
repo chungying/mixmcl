@@ -14,7 +14,7 @@
     <param name="initial_pose_x" value="$(arg init_x)"/>
     <param name="initial_pose_y" value="$(arg init_y)"/>
     <param name="initial_pose_a" value="$(arg init_a)"/>
-    <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-05-234620-param.txt"/>
+    <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-09-182745-param.txt"/>
     <param name="feature_resolution_x" value="1"/>
     <param name="feature_resolution_y" value="1"/>
     <param name="feature_resolution_d" value="100"/>

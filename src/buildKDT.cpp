@@ -42,31 +42,20 @@ int main(int argc, char** argv)
   }
   ROS_INFO("%s: %s", keytimestamp.c_str(), valtimestamp.c_str());
   private_nh.setParam(keytimestamp, valtimestamp);
-  int slowRatio;
-  double ip_x, ip_y, ip_a;
-  private_nh.param("slowRatio", slowRatio, int(50));
-/*  private_nh.param("ip_x", ip_x, double(0));
-  private_nh.param("ip_y", ip_y, double(0));
-  private_nh.param("ip_a", ip_a, double(0));*/
-  ROS_INFO("slowRatio: %d", slowRatio);
   // Override default sigint handler
   signal(SIGINT, sigintHandler);
 
   // Make our node available to sigintHandler
   node_ptr.reset(new SamplingNode());
-  node_ptr->moveRobotUniformly();
   ROS_INFO("start collecting sampling information");
-  int hz = 50;
-  ros::Rate r(hz);
   int count = 0;
   while(nh.ok())
   {
     count++;
     ros::spinOnce();
-    if(count%slowRatio == 0)
-      node_ptr->moveRobotUniformly();
-    r.sleep();
+    node_ptr->sampling();
   }
+
   ROS_INFO("SamplingNode ends.");
   node_ptr.reset();
   }
@@ -74,8 +63,7 @@ int main(int argc, char** argv)
   {
     ROS_INFO("%s",e.what());
   }
-  return(0);
-
+  return 0;
 }
 
 
