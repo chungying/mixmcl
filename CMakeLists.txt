@@ -125,16 +125,6 @@ target_link_libraries(iotest
   dualmcl_tool
 )
 
-add_executable(extraction
-  src/extraction.cpp
-)
-target_link_libraries(extraction
-  ${catkin_LIBRARIES}
-  ${amcl_LIBRARIES}
-  ${nuklei_LIBRARIES}
-  mcl mixmcl_node dualmcl_tool
-)
-
 add_executable(roscheck
   src/roscheck.cpp
 )

@@ -4,6 +4,10 @@
 #include <io/dataio.h>
 
 #include "mixmcl/KCGrid.h"
+#include "tf/tf.h"
+#include "nuklei/Kernel.h"
+#include "amcl/pf/pf.h"
+#include "amcl/pf/pf_vector.h"
 using namespace std;
 
 //basic fstream write and read.
@@ -11,7 +15,6 @@ void TEST1();
 
 //paramio::ParaIn read parameters from filename into a std::map<string, boost::any>
 int TEST2(int argc, char** argv);
-void TEST6(int argc, char** argv);
 
 //dataio::DataIn read data from filename
 void TEST3(string& filename);
@@ -22,14 +25,16 @@ void TEST4(string& filename, const int n);
 //test boost::ptr_map
 void TEST5();
 
+//test conversion betwen pf_vector_t, kernel::se3, tf::Pose and tf::transform
+int TEST6(int argc, char** argv);
+
 int main(int argc, char** argv)
 {
-  
+  return TEST6(argc, argv);
   //TEST5();
 
   //string f(argv[1]);
   //return TEST2(argc, argv);
-  TEST6(argc, argv);
 
 //  TEST4(f,10);
 //  TEST3(f);
@@ -197,24 +202,48 @@ void TEST5()
   }
 }
 
-void TEST6(int argc, char** argv)
+//test conversion betwen pf_vector_t, kernel::se3, tf::Pose and tf::transform
+int TEST6(int argc, char** argv)
 {
-  if(argc >= 1 && argc != 2 && argc != 5)
-  {
-    cout << "argc is " << argc << endl;
-    cout << "iotest filename [x resolution] [y resolution] [d resolution]" << endl;
-    return ;
-  }
-  string filename(argv[1]);
-  size_t fxres = 10;
-  size_t fyres = 10;
-  size_t fdres = 10;
-  if(argc == 5)
-  {
-    fxres = atoi(argv[2]);
-    fyres = atoi(argv[3]);
-    fdres = atoi(argv[4]);
-  }
-  KCGrid(fxres, fyres, fdres, filename);
-  
+  if(argc != 4)
+    return 1;
+  //initial a pf_vector_t vec_p
+  pf_vector_t vec_p;
+  vec_p.v[0] = atof(argv[1]);
+  vec_p.v[1] = atof(argv[2]);
+  vec_p.v[2] = atof(argv[3]);
+  //convert vec_p to tf::Pose tf_p
+  tf::Pose tf_p(
+            tf::createQuaternionFromYaw(vec_p.v[2]),
+            tf::Vector3(
+              vec_p.v[0],
+              vec_p.v[1],
+              0.0));
+  //initial a se3 kernel se3_p with tf_p
+  nuklei::kernel::se3 se3_p;
+  tf::Quaternion q = tf_p.getRotation();
+  tf::Point p = tf_p.getOrigin();
+  se3_p.loc_.X() = p.x();
+  se3_p.loc_.Y() = p.y();
+  se3_p.loc_.Z() = p.z();
+  se3_p.ori_.W() = q.w();
+  se3_p.ori_.X() = q.x();
+  se3_p.ori_.Y() = q.y();
+  se3_p.ori_.Z() = q.z();
+  //convert se3_p to vec_p2
+  pf_vector_t vec_p2;
+  vec_p2.v[0] = se3_p.loc_.X();
+  vec_p2.v[1] = se3_p.loc_.Y();
+  nuklei::Matrix3 mat;
+  se3_p.ori_.ToRotationMatrix(mat);
+  double ax, ay, az;
+  //check the order ZYX
+  mat.ExtractEulerZYX(az, ay, ax);
+  vec_p2.v[2] = (double)az;
+  cout << "vec_p: " << vec_p.v[0] << ' ' << vec_p.v[1] << ' ' << vec_p.v[2] << endl;
+  cout << "vec_p2: " << vec_p2.v[0] << ' ' << vec_p2.v[1] << ' ' << vec_p2.v[2] << endl;
+  cout << "tf_p quaternion: " << q.w() << ' ' << q.x() << ' ' << q.y() << ' ' << q.z() << ", tf_p point: " << p.x() << ' ' << p.y() << ' ' << p.z() << endl;
+  cout << "se3_p: " << se3_p << endl;
+  return 0;
 }
+
