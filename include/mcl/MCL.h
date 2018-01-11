@@ -128,6 +128,12 @@ class MCL
 
     static inline double getYaw(tf::Pose& t);
 
+    static void publishParticleCloud(
+      ros::Publisher& particlecloud_pub_,
+      pf_sample_set_t* set, 
+      std::string& global_frame_id_);
+
+
     // Callbacks
     bool globalLocalizationCallback(std_srvs::Empty::Request& req,
                                     std_srvs::Empty::Response& res);
@@ -269,6 +275,32 @@ MCL<D>::getYaw(tf::Pose& t)
   double yaw, pitch, roll;
   t.getBasis().getEulerYPR(yaw,pitch,roll);
   return yaw;
+}
+
+template<class D>
+void MCL<D>::publishParticleCloud(
+  ros::Publisher& particlecloud_pub_,
+  pf_sample_set_t* set, 
+  std::string& global_frame_id_)
+{
+  // Publish the resulting cloud
+  geometry_msgs::PoseArray cloud_msg;
+  cloud_msg.header.stamp = ros::Time::now();
+  cloud_msg.header.frame_id = global_frame_id_;
+  cloud_msg.poses.resize(set->sample_count);
+  for(int i=0;i<set->sample_count;i++)
+  {
+    tf::poseTFToMsg(
+      tf::Pose(
+        tf::createQuaternionFromYaw(
+          set->samples[i].pose.v[2]),
+        tf::Vector3(
+          set->samples[i].pose.v[0],
+          set->samples[i].pose.v[1], 
+          0)),
+        cloud_msg.poses[i]);
+  }
+  particlecloud_pub_.publish(cloud_msg);
 }
 
 #endif//MCL_H

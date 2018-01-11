@@ -14,18 +14,22 @@ class MixmclNode : public MCL<MixmclNode>
   public:
     MixmclNode();
     ~MixmclNode();
+    static void buildDensityTree(pf_t* pf, boost::shared_ptr<nuklei::KernelCollection>& kdt, double loch, double orih);//build a KernelCollection based on previous weighted set for evaluating current dual set
+    static inline void poseToSe3(const pf_vector_t& vec_p, nuklei::kernel::se3& se3_p);
   protected:
     //inheritance
     void laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan);
     void GLCB()
     {
       ROS_INFO("MixmclNode::GLCB() is called. Build density tree..");
-      buildDensityTree();
+      //buildDensityTree();
+      buildDensityTree(pf_, kdt_, loch_, orih_);
     };
     void AIP()
     {
       ROS_INFO("MixmclNode::AIP() is called. Build density tree..");
-      buildDensityTree();
+      //buildDensityTree();
+      buildDensityTree(pf_, kdt_, loch_, orih_);
     };
     virtual void RCCB();
 
@@ -40,14 +44,14 @@ class MixmclNode : public MCL<MixmclNode>
     ros::Publisher particlecloud2_pub_;
     dynamic_reconfigure::Server<mixmcl::MIXMCLConfig> *dsrv2_;
     mixmcl::MIXMCLConfig default_config2_;
-    void buildDensityTree();//build a KernelCollection based on previous weighted set for evaluating current dual set
+    //void buildDensityTree();//build a KernelCollection based on previous weighted set for evaluating current dual set
     void mixtureProposals();//determin the size of dual set and regular set
     void combineSets();//combining dual set and regular set
-    void publishCloud2();//publish the particles drawn from a kdtree of KernelCollection wrt current laser feature
+    void publishCloud(pf_sample_set_t* set);
+    void publishCloud2(pf_sample_set_t* set);//publish the particles drawn from a kdtree of KernelCollection wrt current laser feature
     void createKCGrid();//read data from binary file and create a discrete KernelCollection grid
     void reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level);
     static inline void se3ToPose(const nuklei::kernel::se3& se3_p, pf_vector_t& vec_p);
-    static inline void poseToSe3(const pf_vector_t& vec_p, nuklei::kernel::se3& se3_p);
 
 };
 

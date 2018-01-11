@@ -4,6 +4,7 @@
   <arg name="init_x" default="-9" />
   <arg name="init_y" default="8.4" />
   <arg name="init_a" default="0" />
+  <arg name="max_particles" default="2000" />
   <arg name="launch-prefix" default="" />
 
   <env name="ROSCONSOLE_CONFIG_FILE" 
@@ -15,6 +16,8 @@
     <param name="initial_pose_y" value="$(arg init_y)"/>
     <param name="initial_pose_a" value="$(arg init_a)"/>
     <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-09-182745-param.txt"/>
+    <param name="laser_model_type" value="beam"/>
+    <arg name="max_particles" default="$(arg max_particles)" />
     <!--param name="" value=""/>
     <param name="" value=""/>
     <param name="" value=""/-->

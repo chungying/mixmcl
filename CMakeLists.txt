@@ -33,6 +33,7 @@ pkg_check_modules(nuklei nuklei)
 # dynamic reconfigure
 generate_dynamic_reconfigure_options(
     cfg/MIXMCL.cfg
+    cfg/MCMCL.cfg
 )
 
 catkin_package(
@@ -44,7 +45,7 @@ catkin_package(
     nav_msgs
     std_srvs
   INCLUDE_DIRS include
-  LIBRARIES mcl dualmcl_tool mixmcl_node amcl_node 
+  LIBRARIES mcl dualmcl_tool mixmcl_node amcl_node mcmcl_node
 )
 
 ##include dirrectories##
@@ -62,6 +63,7 @@ include_directories(
 ##Build libraries##
 add_library(mcl
   src/mcl/MCL.cpp
+  src/amcl/pf/pf_resample.cpp
 )
 target_link_libraries(mcl
   ${amcl_LIBRARIES}
@@ -72,9 +74,7 @@ target_link_libraries(mcl
 add_library(mixmcl_node
   #definition of class MixmclNode 
   src/mixmcl/MixmclNode.cpp
-  src/amcl/pf/pf_resample.cpp
 )
-message(STATUS "amcl_LIBRARIES is ${amcl_LIBRARIES}")
 target_link_libraries(mixmcl_node
   ${amcl_LIBRARIES}
   ${Boost_LIBRARIES}
@@ -91,6 +91,16 @@ target_link_libraries(amcl_node
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
   mcl
+)
+
+add_library(mcmcl_node
+  src/mcmcl/McmclNode.cpp
+)
+target_link_libraries(mcmcl_node
+  ${amcl_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
+  mcl mixmcl_node
 )
 
 add_library(dualmcl_tool
@@ -111,8 +121,6 @@ target_link_libraries(dualmcl_tool
   mcl
 )
 
-message(STATUS "nuklei_LIBRARIES is ${nuklei_LIBRARIES}")
-message(STATUS "PCL_COMMON_LIBRARIES is ${PCL_COMMON_LIBRARIES}")
 ##Build executables##
 add_executable(iotest
   src/iotest.cpp
@@ -141,7 +149,17 @@ target_link_libraries(amcl
   ${catkin_LIBRARIES}
   mcl amcl_node
 )
- 
+
+add_executable(mcmcl
+  src/mcmcl.cpp
+)
+target_link_libraries(mcmcl
+  ${amcl_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
+  mcl mcmcl_node
+)
+
 add_executable(mixmcl
   src/mixmcl.cpp
 )
@@ -176,16 +194,15 @@ target_link_libraries(dual
 )
 
 install( TARGETS
-    mixmcl amcl buildKDT iotest roscheck dual
+    mixmcl amcl mcmcl buildKDT iotest roscheck dual
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 install( TARGETS
     mcl dualmcl_tool 
-    LIBRARY DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )
 
-message(STATUS "CATKIN_PACKAGE_INCLUDE_DESTINATION is ${CATKIN_PACKAGE_INCLUDE_DESTINATION}")
 install(DIRECTORY include
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )

@@ -43,6 +43,7 @@ void pf_update_resample_low_variance(pf_t* pf)
       c += set_a->samples[i].weight;
     }
     m++;
+    sample_b->pose = set_a->samples[i].pose;
     sample_b->weight = 1.0;
     total += sample_b->weight;
     // Add sample to histogram

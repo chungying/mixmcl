@@ -3,40 +3,42 @@
 <launch>
   <env name="ROSCONSOLE_CONFIG_FILE" 
      value="$(find mixmcl)/config/custom_rosconsole.conf"/>
+  <arg name="playbag" default="true"/>
+  <arg name="bagfile" default="/home/jolly/rosbag/2018-01-07-15-27-03-clean-filtered.bag"/>
   <arg name="gazebo" default="false"/>
   <arg name="rviz" default="true"/>
+  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
+  <!--MCL package parameters-->
+  <arg name="launch-prefix" default=""/>
+  <arg name="mcl_pkg" default="amcl"/>
   <arg name="init_x" default="-9" />
   <arg name="init_y" default="8.4" />
   <arg name="init_a" default="0" />
-  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
-  <arg name="mcl_pkg" default="amcl"/>
-  <arg name="launch-prefix" default=""/>
+  <arg name="max_particles" default="2000"/>
 
   <!--MAP SERVER-->
   <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_yaml)" />
 
   <!--AMCL and GAZEBO-->
   <include file="$(find mixmcl)/launch/$(arg mcl_pkg).launch">
+    <arg name="launch-prefix" value="$(arg launch-prefix)"/>
     <arg name="init_x" value="$(arg init_x )"/>
     <arg name="init_y" value="$(arg init_y )"/>
     <arg name="init_a" value="$(arg init_a )"/>
-    <arg name="launch-prefix" value="$(arg launch-prefix)"/>
+    <arg name="max_particles" value="$(arg max_particles)"/>
   </include>
 
   <!--P3DX in GAZEBO-->
-  <include file="$(find p3dx_gazebo)/launch/gazebo.launch">
+  <include file="$(find p3dx_gazebo)/launch/gazebo.launch" unless="$(arg playbag)">
     <arg name="gui" value="$(arg gazebo)"/>
     <arg name="init_x" value="$(arg init_x )"/>
     <arg name="init_y" value="$(arg init_y )"/>
     <arg name="init_a" value="$(arg init_a )"/>
   </include>
-
-  <!--TODO move state publishers settins to gazebo.launch-->
-  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
-  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
+  <node name="rosbagplayer" pkg="rosbag" type="play" args="--clock $(arg bagfile)" if="$(arg playbag)"/>
 
   <!--MOVE BASE for COSTMAP-->
-  <include file="$(find p3dx_2dnav)/launch/move_base.launch">
+  <include file="$(find p3dx_2dnav)/launch/move_base.launch" unless="$(arg playbag)">
     <arg name="cmd_vel" value="/p3dx/cmd_vel"/>
   </include>
 

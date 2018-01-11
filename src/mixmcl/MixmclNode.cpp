@@ -28,11 +28,11 @@ MixmclNode::MixmclNode() :
     private_nh_.getParam(param_key_name.c_str(), fdres_);
 
   if(!private_nh_.searchParam("sample_param_filename", param_key_name))
-    ROS_ERROR("In SamplingNode::SamplingNode() cannot find parameter named sample_param_filename");
+    ROS_ERROR("In MixmclNode::MixmclNode() cannot find parameter named sample_param_filename");
   else
   {
     private_nh_.getParam(param_key_name.c_str(), sample_param_filename_);
-    ROS_INFO("SamplingNode::SamplingNode() is going to read the parameter %s", sample_param_filename_.c_str());
+    ROS_INFO("MixmclNode::MixmclNode() is going to read the parameter %s", sample_param_filename_.c_str());
   }
 
   if(!private_nh_.searchParam("dual_normalizer_ita", param_key_name))
@@ -77,13 +77,18 @@ MixmclNode::MixmclNode() :
   dsrv2_->setCallback(cb2);
 
   if(!kdt_)
-    buildDensityTree();
+  {
+    ROS_DEBUG("kdt_ is NULL. MixmclNode() ends");
+    buildDensityTree(pf_, kdt_, loch_, orih_);
+  }
+  else
+    ROS_DEBUG("kdt_ is not NULL. MixmclNode() ends");
 }
 
 void MixmclNode::RCCB()
 {
   ROS_INFO("MixmclNode::RCCB() is called. Build density tree..");
-  buildDensityTree();
+  buildDensityTree(pf_, kdt_, loch_, orih_);
   delete laser_scan_filter_;
   laser_scan_filter_ = 
           new tf::MessageFilter<sensor_msgs::LaserScan>(*laser_scan_sub_, 
@@ -102,14 +107,14 @@ void MixmclNode::reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level)
   if(first_reconfigureCB2_call_)
   {
     ROS_INFO("first reconfigureCB2. Build density tree...");
-    buildDensityTree();
+    buildDensityTree(pf_, kdt_, loch_, orih_);
     first_reconfigureCB2_call_ = false;
     default_config2_ = config;
     return;
   }
 /////////////////////Dual MCL//////////////////
   //reconfigure the mixing rate
-  ROS_INFO("MixmclNode::reconfigureCB2(...)");
+  ROS_DEBUG("MixmclNode::reconfigureCB2(...)");
   ita_ = config.dual_normalizer_ita;
   mixing_rate_ = config.mixing_rate;
   loch_ = config.position_bandwidth;
@@ -134,9 +139,33 @@ MixmclNode::~MixmclNode()
   delete laser_scan_filter_;
 }
 
-void MixmclNode::publishCloud2()
+//TODO make static in MCL
+void MixmclNode::publishCloud(pf_sample_set_t* set)
 {
-  pf_sample_set_t* set = pf_->sets + (pf_->current_set + 1)%2;
+  // Publish the resulting cloud
+  geometry_msgs::PoseArray cloud_msg;
+  cloud_msg.header.stamp = ros::Time::now();
+  cloud_msg.header.frame_id = global_frame_id_;
+  cloud_msg.poses.resize(set->sample_count);
+  for(int i=0;i<set->sample_count;i++)
+  {
+    tf::poseTFToMsg(
+      tf::Pose(
+        tf::createQuaternionFromYaw(
+          set->samples[i].pose.v[2]),
+        tf::Vector3(
+          set->samples[i].pose.v[0],
+          set->samples[i].pose.v[1], 
+          0)),
+        cloud_msg.poses[i]);
+  }
+  particlecloud_pub_.publish(cloud_msg);
+  
+}
+
+void MixmclNode::publishCloud2(pf_sample_set_t* set)
+{
+//  pf_sample_set_t* set = pf_->sets + (pf_->current_set + 1)%2;
   geometry_msgs::PoseArray cloud_msg;
   cloud_msg.header.stamp = ros::Time::now();
   cloud_msg.header.frame_id = global_frame_id_;
@@ -226,16 +255,14 @@ MixmclNode::createKCGrid()
 
 }
 
-void 
-MixmclNode::buildDensityTree()
+void MixmclNode::buildDensityTree(pf_t* pf, boost::shared_ptr<nuklei::KernelCollection>& kdt, double loch, double orih)
 {
-  if(!kdt_)
+  if(!kdt)
     ROS_DEBUG("old kdt_ is NULL. Rebuilding density tree.");
   else
     ROS_DEBUG("old kdt_ is not NULL. Rebuilding density tree.");
-    
-  kdt_.reset(new nuklei::KernelCollection);
-  pf_sample_set_t* set = pf_->sets + pf_->current_set;
+  kdt.reset(new nuklei::KernelCollection);
+  pf_sample_set_t* set = pf->sets + pf->current_set;
   int count = 0;
   for(int i=0;i<set->sample_count;i++,count++)
   {
@@ -250,13 +277,13 @@ MixmclNode::buildDensityTree()
     se3k.ori_.Z() = q.z();
     se3k.setWeight(set->samples[i].weight);
     //add the kernel into kdt_
-    kdt_->add(se3k);
+    kdt->add(se3k);
   }
   //set kernel bandwidth to the tree
-  kdt_->setKernelLocH(loch_);
-  kdt_->setKernelOriH(orih_);
-  kdt_->normalizeWeights();
-  kdt_->buildKdTree();
+  kdt->setKernelLocH(loch);
+  kdt->setKernelOriH(orih);
+  kdt->normalizeWeights();
+  kdt->buildKdTree();
 }
 
 void
@@ -323,7 +350,6 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     ROS_ERROR("Couldn't determine robot's pose associated with laser scan");
     return;
   }
-
 
   pf_vector_t delta = pf_vector_zero();
   pf_vector_t inverse_delta = pf_vector_zero();
@@ -513,14 +539,15 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     pf_->current_set = (pf_->current_set + 1) % 2;
     //publish the particle cloud
     //note that this cloud has been applied the inverse odata.
-    publishCloud2();
+    pf_sample_set_t* set = pf_->sets + (pf_->current_set + 1)%2;
+    publishCloud2(set);
     //Finally, combine the set together
     combineSets();
     //Build the density tree based on the weighted particles
-    buildDensityTree();
+    buildDensityTree(pf_, kdt_, loch_, orih_);
 ///////////////////////////////////////////////
     double total = dual_set_total + regular_set_total;
-    pf_sample_set_t* set = pf_->sets + pf_->current_set;
+    set = pf_->sets + pf_->current_set;
     double w_avg = pf_normalize(set, total);
     //useless
     //pf_update_augmented_weight(pf_, w_avg);
@@ -540,20 +567,23 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     ROS_DEBUG("Num samples: %d\n", set->sample_count);
     // Publish the resulting cloud
     if (!m_force_update) 
-    {
-      geometry_msgs::PoseArray cloud_msg;
-      cloud_msg.header.stamp = ros::Time::now();
-      cloud_msg.header.frame_id = global_frame_id_;
-      cloud_msg.poses.resize(set->sample_count);
-      for(int i=0;i<set->sample_count;i++)
-      {
-        tf::poseTFToMsg(tf::Pose(tf::createQuaternionFromYaw(set->samples[i].pose.v[2]),
-                                 tf::Vector3(set->samples[i].pose.v[0],
-                                           set->samples[i].pose.v[1], 0)),
-                        cloud_msg.poses[i]);
-      }
-      particlecloud_pub_.publish(cloud_msg);
-    }
+      //publishCloud(set);
+      MCL::publishParticleCloud(particlecloud_pub_, set, global_frame_id_);
+    //if (!m_force_update) 
+    //{
+    //  geometry_msgs::PoseArray cloud_msg;
+    //  cloud_msg.header.stamp = ros::Time::now();
+    //  cloud_msg.header.frame_id = global_frame_id_;
+    //  cloud_msg.poses.resize(set->sample_count);
+    //  for(int i=0;i<set->sample_count;i++)
+    //  {
+    //    tf::poseTFToMsg(tf::Pose(tf::createQuaternionFromYaw(set->samples[i].pose.v[2]),
+    //                             tf::Vector3(set->samples[i].pose.v[0],
+    //                                       set->samples[i].pose.v[1], 0)),
+    //                    cloud_msg.poses[i]);
+    //  }
+    //  particlecloud_pub_.publish(cloud_msg);
+    //}
   }//endif(lasers_update_[laser_index])
 
   if(resampled || force_publication)
