@@ -46,13 +46,12 @@ McmclNode::McmclNode() :
     resample_function_ = &pf_update_resample_kld;
     ROS_INFO("Resample type: kld instead of %s", tmp_resample_type.c_str());
   }
-  map_min_x_ = MAP_WXGX(map_, 0);
-  map_max_x_ = MAP_WXGX(map_, map_->size_x);
-  map_min_y_ = MAP_WYGY(map_, 0);
-  map_max_y_ = MAP_WYGY(map_, map_->size_y);
-  map_rng_x_ = map_max_x_ - map_min_x_;
-  map_rng_y_ = map_max_y_ - map_min_y_;
-  ROS_INFO("max: [%f %f], min: [%f %f], range: [%f %f]", map_max_x_, map_max_y_, map_min_x_, map_min_y_, map_rng_x_, map_rng_y_);
+//  mapx_.first = MAP_WXGX(map_, 0);
+//  mapx_.second = MAP_WXGX(map_, map_->size_x); 
+//  mapy_.first = MAP_WYGY(map_, 0);
+//  mapy_.second = MAP_WYGY(map_, map_->size_y); 
+//  map_rng_x_ = mapx_.second - mapx_.first;
+//  map_rng_y_ = mapy_.second - mapy_.first;
 
   if(laser_scan_filter_!=NULL)
     delete laser_scan_filter_;
@@ -578,10 +577,10 @@ void McmclNode::demcProposal(pf_sample_set_t* pool, pf_sample_set_t* pop)
     diff.v[1] = gamma_ * diff.v[1] + MCL::rng_.gaussian(0, loc_bw_);
     diff.v[2] = gamma_ * angle_diff( (rand1->pose.v[2]), (rand2->pose.v[2]) ) + MCL::rng_.gaussian(0, ori_bw_);
     child->pose = pf_vector_add(parent->pose, diff);
-    if( child->pose.v[0] > map_max_x_ || child->pose.v[0] < map_min_x_)
-      child->pose.v[0] = fmod( fmod( child->pose.v[0] - map_min_x_ , map_rng_x_) + map_rng_x_, map_rng_x_) + map_min_x_;
-    if( child->pose.v[1] > map_max_y_ || child->pose.v[1] < map_min_y_)
-      child->pose.v[1] = fmod( fmod( child->pose.v[1] - map_min_y_ , map_rng_y_) + map_rng_y_, map_rng_y_) + map_min_y_;
+    if( child->pose.v[0] > mapx_.second || child->pose.v[0] < mapx_.first)
+      child->pose.v[0] = fmod( fmod( child->pose.v[0] - mapx_.first , map_rng_x_) + map_rng_x_, map_rng_x_) + mapx_.first;
+    if( child->pose.v[1] > mapy_.second || child->pose.v[1] < mapy_.first)
+      child->pose.v[1] = fmod( fmod( child->pose.v[1] - mapy_.first , map_rng_y_) + map_rng_y_, map_rng_y_) + mapy_.first;
     child->pose.v[2] = normalize(child->pose.v[2]);
     //set all weights to be one
     child->weight = 1.0;

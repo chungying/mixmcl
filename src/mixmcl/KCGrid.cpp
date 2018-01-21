@@ -17,20 +17,24 @@ using namespace dataio;
 //  }
 //}
 
-KCGrid::KCGrid(size_t X, size_t Y, size_t D, string& para_file, double loch, double orih)
-:X(X), Y(Y), D(D), max_size_(X*Y*D), data_count_(0)
+KCGrid::KCGrid(size_t X, size_t Y, size_t D, std::string& para_file, std::pair<double, double> mapx, std::pair<double, double> mapy, double loch, double orih)
+:X(X), Y(Y), D(D), max_size_(X*Y*D), data_count_(0), mapx_(mapx), mapy_(mapy)
 {
   scoped_ptr<ParamIn> param(new ParamIn(para_file));
   if(!param->readAllLines())
   {
     stringstream ss;
-    ss << "KCGrid::KCGrid(..., string&) cannot read parameter file named \"";
+    ss << "KCGrid::KCGrid(..., string&, pair<>, pair<>, double, double) cannot read parameter file named \"";
     ss << para_file.c_str() << '\"' << endl;
     throw runtime_error(ss.str());
   }
   assignLimits(param->map_);
   convert(param->map_, loch, orih);
 }
+
+KCGrid::KCGrid(size_t X, size_t Y, size_t D, string& para_file, double loch, double orih)
+:KCGrid(X, Y, D, para_file, std::pair<double, double>(), std::pair<double, double>(), loch, orih)
+{}
 
 KCGrid::KCGrid(size_t X, size_t Y, size_t D, map<string, any>& m)
 :X(X), Y(Y), D(D), max_size_(X*Y*D), data_count_(0), mapx_(), mapy_()
@@ -105,7 +109,6 @@ void KCGrid::assignLimits(
   xlim = make_pair(xmin, xmax);
   ylim = make_pair(ymin, ymax);
   dlim = make_pair(dmin, dmax);
-  //TODO assign maplimx, maplimy
 }
 
 bool KCGrid::assignLimits( const map<string, any>& m)
@@ -182,7 +185,6 @@ void KCGrid::convert(map<string, any>& m, double loch, double orih)
     throw runtime_error(ss.str());
   }
 
-  //TODO wrap the following code
   //reading data into trees
   scoped_ptr<DataIn> datain_ptr_;
   datain_ptr_.reset(new DataIn(datafilename));
@@ -192,31 +194,59 @@ void KCGrid::convert(map<string, any>& m, double loch, double orih)
   tf::Vector3 v;
   size_t idx;
   data_count_ = 0;
-  //TODO filter out the pose locate within the map region
+  //filter out the pose locate within the map region
   //because sometimes smaller map will be used instead of the original large map.
   //this requires minx, maxx, miny, maxy in meters
-  while(datain_ptr_->readALine(p, f))
-  {
-    ++data_count_;
-    //create a se3 kernel based on the pose
-    nuklei::kernel::se3 k;
-    k.loc_.X() = p.v[0];
-    k.loc_.Y() = p.v[1];
-    q = tf::createQuaternionFromYaw(p.v[2]);
-    v = q.getAxis();
-    k.ori_.W() = q.getW();
-    k.ori_.X() = v.x();
-    k.ori_.Y() = v.y();
-    k.ori_.Z() = v.z();
-    k.setWeight(1);
-    // add the kernel to the tree corresponding to  features
-    idx = C2VI((float)(f.x), (float)(f.y), (float)(f.dist));
-    if(tree_map_.find(idx) == tree_map_.end())
-      tree_map_.insert(
-        make_pair(
-          idx, TreeMap::mapped_type(new nuklei::KernelCollection)));
-    tree_map_.at(idx)->add(k);
-  }
+  if( mapx_.first!=mapx_.second && mapy_.first!=mapy_.second)
+    while(datain_ptr_->readALine(p, f))
+    {
+      if(p.v[0] < mapx_.first || p.v[0] > mapx_.second || p.v[1] < mapy_.first || p.v[1] > mapy_.second)
+        continue;
+      ++data_count_;
+      //create a se3 kernel based on the pose
+      nuklei::kernel::se3 k;
+      k.loc_.X() = p.v[0];
+      k.loc_.Y() = p.v[1];
+      q = tf::createQuaternionFromYaw(p.v[2]);
+      v = q.getAxis();
+      k.ori_.W() = q.getW();
+      k.ori_.X() = v.x();
+      k.ori_.Y() = v.y();
+      k.ori_.Z() = v.z();
+      k.setWeight(1);
+      // add the kernel to the tree corresponding to  features
+      idx = C2VI((float)(f.x), (float)(f.y), (float)(f.dist));
+      if(tree_map_.find(idx) == tree_map_.end())
+        tree_map_.insert(
+          make_pair(
+            idx, TreeMap::mapped_type(new nuklei::KernelCollection)));
+      tree_map_.at(idx)->add(k);
+    }
+  else
+    while(datain_ptr_->readALine(p, f))
+    {
+      ++data_count_;
+      //create a se3 kernel based on the pose
+      nuklei::kernel::se3 k;
+      k.loc_.X() = p.v[0];
+      k.loc_.Y() = p.v[1];
+      q = tf::createQuaternionFromYaw(p.v[2]);
+      v = q.getAxis();
+      k.ori_.W() = q.getW();
+      k.ori_.X() = v.x();
+      k.ori_.Y() = v.y();
+      k.ori_.Z() = v.z();
+      k.setWeight(1);
+      // add the kernel to the tree corresponding to  features
+      idx = C2VI((float)(f.x), (float)(f.y), (float)(f.dist));
+      if(tree_map_.find(idx) == tree_map_.end())
+        tree_map_.insert(
+          make_pair(
+            idx, TreeMap::mapped_type(new nuklei::KernelCollection)));
+      tree_map_.at(idx)->add(k);
+    }
+
+
   if(data_count_ == 0)
   {
     stringstream ss;

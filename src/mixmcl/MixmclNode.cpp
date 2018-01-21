@@ -94,20 +94,11 @@ MixmclNode::MixmclNode() :
   dynamic_reconfigure::Server<mixmcl::MIXMCLConfig>::CallbackType cb2 = boost::bind(&MixmclNode::reconfigureCB2, this, _1, _2);
   dsrv2_->setCallback(cb2);
   this->printInfo();
-
-  //if(!kdt_)
-  //{
-  //  ROS_DEBUG("kdt_ is NULL. MixmclNode() ends");
-  //  buildDensityTree(pf_, kdt_, loch_, orih_);
-  //}
-  //else
-  //  ROS_DEBUG("kdt_ is not NULL. MixmclNode() ends");
 }
 
 void MixmclNode::RCCB()
 {
   ROS_INFO("MixmclNode::RCCB() is called. Build density tree..");
-  //buildDensityTree(pf_, kdt_, loch_, orih_);
   delete laser_scan_filter_;
   laser_scan_filter_ = 
           new tf::MessageFilter<sensor_msgs::LaserScan>(*laser_scan_sub_, 
@@ -121,12 +112,8 @@ void MixmclNode::RCCB()
 void MixmclNode::reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level)
 {
   boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
-  //do buildDensityTree on the first call
-  //which corresponds to startup dsrv2_->setCallback(cb2)
   if(first_reconfigureCB2_call_)
   {
-    //ROS_INFO("first reconfigureCB2. Build density tree...");
-    //buildDensityTree(pf_, kdt_, loch_, orih_);
     first_reconfigureCB2_call_ = false;
     default_config2_ = config;
     return;
@@ -200,7 +187,7 @@ MixmclNode::createKCGrid()
   {
     ROS_INFO("Building KCGrid... It might take a some time depending on file size");
     //if the file doesn't exist, it shall throw exception
-    kcgrid_.reset(new KCGrid(fxres_, fyres_, fdres_, sample_param_filename_, loch_, orih_) );
+    kcgrid_.reset(new KCGrid(fxres_, fyres_, fdres_, sample_param_filename_, mapx_, mapy_, loch_, orih_) );
     ROS_INFO("Finished building KCGrid.");
   }
   catch(const std::exception& e)
@@ -221,8 +208,7 @@ void MixmclNode::buildDensityTree(pf_t* pf, boost::shared_ptr<nuklei::KernelColl
     ROS_DEBUG("old kdt_ is not NULL. Rebuilding density tree.");
   kdt.reset(new nuklei::KernelCollection);
   pf_sample_set_t* set = pf->sets + pf->current_set;
-  int count = 0;
-  for(int i=0;i<set->sample_count;i++,count++)
+  for(int i=0;i<set->sample_count;i++)
   {
     tf::Quaternion q = tf::createQuaternionFromYaw(set->samples[i].pose.v[2]);
     //new kernel
@@ -360,7 +346,6 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     resample_count_ = 0;
     //build a density tree based on set_a
     //because set_a is just initialized
-    //TODO remove buildDensityTree from other functions.
     assert(pf_->sets[set_a_idx].sample_count!=0);//in case resample functions assign zero to the sample count
     buildDensityTree(pf_, kdt_, loch_, orih_);
     // using mixing_rate_ to seperate current set into two sets,
@@ -608,7 +593,7 @@ double MixmclNode::dualmclNEvaluation(amcl::AMCLLaserData& ldata, amcl::AMCLOdom
     sample_a->weight = sample_b->weight;
   }
   set_a->sample_count += set_b->sample_count;
-  set_b->sample_count = 0;
+  //set_b->sample_count = 0;
   pf_->current_set = set_a_idx;
   return dual_set_total + regular_set_total;
 }

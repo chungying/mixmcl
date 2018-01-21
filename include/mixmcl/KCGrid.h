@@ -33,9 +33,8 @@ class KCGrid
     typedef ::flann::L2_Simple<float> Dist;
     typedef ::flann::Index<Dist> FLANNIndex;
     //void testPrint( int i );
-    //TODO 
-    KCGrid(size_t X, size_t Y, size_t D, std::string& para_file, std::pair<double, double>& mapx, std::pair<double, double>& mapy, double loch = 10, double orih = 0.4)
-:KCGrid(X, Y, D, para_file, loch, orih){mapx_=mapx; mapy_=mapy;};
+    KCGrid(size_t X, size_t Y, size_t D, std::string& para_file, std::pair<double, double> mapx, std::pair<double, double> mapy, double loch = 10, double orih = 0.4);
+
     KCGrid(size_t X, size_t Y, size_t D, std::string& para_file, double loch = 10, double orih = 0.4);
 
     KCGrid(size_t X, size_t Y, size_t D, std::map<std::string, boost::any>& m);
@@ -79,10 +78,6 @@ class KCGrid
     void assignLimits(float xmin, float xmax, float ymin, float ymax, float dmin, float dmax);
 
     bool assignLimits( const std::map<std::string, boost::any>& m);
-
-    //TODO 
-    //std::string& getDataFilename( const std::map<std::string, boost::any>& m);
-    //void convert(const std::string& datafilename, double loch = 10, double orih = 0.4);
 
     void convert(std::map<std::string, boost::any>& m, double loch = 10, double orih = 0.4);
 

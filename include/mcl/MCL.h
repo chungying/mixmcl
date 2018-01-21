@@ -173,7 +173,12 @@ class MCL
 
     geometry_msgs::PoseWithCovarianceStamped last_published_pose;
 
+    //for map information
     map_t* map_;
+    std::pair<double, double> mapx_;
+    std::pair<double, double> mapy_;
+    double map_rng_x_;
+    double map_rng_y_;
     char* mapdata;
     int sx, sy;
     double resolution;
@@ -282,6 +287,7 @@ class MCL
       ROS_INFO("z: %f %f %f %f", z_hit_, z_short_, z_max_, z_rand_);
       ROS_INFO("sigma lamda: %f %f", sigma_hit_, lambda_short_);
       ROS_INFO("alphas: %f %f %f %f %f", alpha1_, alpha2_, alpha3_, alpha4_, alpha5_);
+      ROS_INFO("max: [%f %f], min: [%f %f], range: [%f %f]", mapx_.second, mapy_.second, mapx_.first, mapy_.first, map_rng_x_, map_rng_y_);
     };
 };
 

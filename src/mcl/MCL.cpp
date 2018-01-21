@@ -393,8 +393,13 @@ MCL<D>::handleMapMessage(const nav_msgs::OccupancyGrid& msg)
   lasers_.clear();
   lasers_update_.clear();
   frame_to_laser_.clear();
-
   map_ = convertMap(msg);
+  mapx_.first = MAP_WXGX(map_, 0);
+  mapx_.second = MAP_WXGX(map_, map_->size_x); 
+  mapy_.first = MAP_WYGY(map_, 0);
+  mapy_.second = MAP_WYGY(map_, map_->size_y); 
+  map_rng_x_ = mapx_.second - mapx_.first;
+  map_rng_y_ = mapy_.second - mapy_.first;
 
 #if NEW_UNIFORM_SAMPLING
   // Index of free space

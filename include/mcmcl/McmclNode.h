@@ -59,13 +59,6 @@ class McmclNode : public MCL<McmclNode>
     dynamic_reconfigure::Server<mixmcl::MCMCLConfig> *dsrv2_;
     mixmcl::MCMCLConfig default_config2_;
     void reconfigureCB2(mixmcl::MCMCLConfig& config, uint32_t level);
-    //for map information
-    double map_min_x_;
-    double map_max_x_;
-    double map_min_y_;
-    double map_max_y_;
-    double map_rng_x_;
-    double map_rng_y_;
     void printInfo()
     {
       ROS_INFO("ita: %f", ita_);
