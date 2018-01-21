@@ -42,9 +42,14 @@ int main(int argc, char** argv)
   }
   ROS_INFO("%s: %s", keytimestamp.c_str(), valtimestamp.c_str());
   private_nh.setParam(keytimestamp, valtimestamp);
+  double freq;
+  private_nh.param("frequency", freq, 0.0);
+  boost::shared_ptr<ros::Rate> rate;
+  if(freq>0)
+    rate.reset(new ros::Rate(freq));
   // Override default sigint handler
   signal(SIGINT, sigintHandler);
-
+  ROS_INFO("frequency is %f", freq);
   // Make our node available to sigintHandler
   node_ptr.reset(new SamplingNode());
   ROS_INFO("start collecting sampling information");
@@ -54,6 +59,8 @@ int main(int argc, char** argv)
     count++;
     ros::spinOnce();
     node_ptr->sampling();
+    if(freq>0)
+      rate->sleep();
   }
 
   ROS_INFO("SamplingNode ends.");

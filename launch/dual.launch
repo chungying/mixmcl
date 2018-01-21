@@ -6,6 +6,7 @@
   <arg name="init_x" default="-9" />
   <arg name="init_y" default="8.4" />
   <arg name="init_a" default="0" />
+  <arg name="max_particles" />
   <arg name="launch-prefix" default="" />
 
   <node pkg="mixmcl" type="dual" name="dual" output="screen" launch-prefix="$(arg launch-prefix)">
@@ -14,12 +15,19 @@
     <param name="initial_pose_x" value="$(arg init_x)"/>
     <param name="initial_pose_y" value="$(arg init_y)"/>
     <param name="initial_pose_a" value="$(arg init_a)"/>
+    <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-12-234006-param.txt"/>
+    <param name="feature_resolution_x" value="10"/>
+    <param name="feature_resolution_y" value="10"/>
+    <param name="feature_resolution_d" value="100"/>
+    <param name="sampling" value="true"/>
+    <param name="dual_loc_bandwidth" value="1"/>
+    <param name="dual_ori_bandwidth" value="0.1"/>
+    <!--
     <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-09-182745-param.txt"/>
     <param name="feature_resolution_x" value="1"/>
     <param name="feature_resolution_y" value="1"/>
-    <param name="feature_resolution_d" value="100"/>
-    <!--param name="" value=""/>
+    <param name="feature_resolution_d" value="1000"/>
     <param name="" value=""/>
-    <param name="" value=""/-->
+    -->
   </node>
 </launch>

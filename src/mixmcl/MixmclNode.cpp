@@ -45,15 +45,33 @@ MixmclNode::MixmclNode() :
   else
     private_nh_.param(param_key_name.c_str(), mixing_rate_, 0.5);
 
-  if(!private_nh_.searchParam("position_bandwidth", param_key_name))
-    private_nh_.param("position_bandwidth", loch_, 10.0);
+  if(!private_nh_.searchParam("dual_loc_bandwidth", param_key_name))
+    private_nh_.param("dual_loc_bandwidth", loch_, 5.0);
   else
-    private_nh_.param(param_key_name.c_str(), loch_, 0.5);
+    private_nh_.param(param_key_name.c_str(), loch_, 0.1);
 
-  if(!private_nh_.searchParam("oriantation_bandwidth", param_key_name))
-    private_nh_.param("oriantation_bandwidth", orih_, 0.4);
+  if(!private_nh_.searchParam("dual_ori_bandwidth", param_key_name))
+    private_nh_.param("dual_ori_bandwidth", orih_, 0.4);
   else
     private_nh_.param(param_key_name.c_str(), orih_, 0.5);
+
+  std::string tmp_resample_type;
+  private_nh_.param("resample_type", tmp_resample_type, std::string("kld"));
+  ROS_INFO("Resample type is %s", tmp_resample_type.c_str());
+  if(tmp_resample_type == "augmented")
+  {
+    resample_function_ = &pf_update_resample_kld;
+    ROS_INFO("Resample type: kld because MCMCL doesn't take augmented resampling methods.");
+  }
+  else if(tmp_resample_type == "kld")
+    resample_function_ = &pf_update_resample_kld;
+  else if(tmp_resample_type == "lowvariance")
+    resample_function_ = &pf_update_resample_lowvariance;
+  else
+  {
+    resample_function_ = &pf_update_resample_kld;
+    ROS_INFO("Resample type: kld instead of %s", tmp_resample_type.c_str());
+  }
 
   createKCGrid();
 /////////////////end Dual MCL//////////////////
@@ -75,20 +93,21 @@ MixmclNode::MixmclNode() :
   dsrv2_ = new dynamic_reconfigure::Server<mixmcl::MIXMCLConfig>(ros::NodeHandle("~/mixmcl_dc"));
   dynamic_reconfigure::Server<mixmcl::MIXMCLConfig>::CallbackType cb2 = boost::bind(&MixmclNode::reconfigureCB2, this, _1, _2);
   dsrv2_->setCallback(cb2);
+  this->printInfo();
 
-  if(!kdt_)
-  {
-    ROS_DEBUG("kdt_ is NULL. MixmclNode() ends");
-    buildDensityTree(pf_, kdt_, loch_, orih_);
-  }
-  else
-    ROS_DEBUG("kdt_ is not NULL. MixmclNode() ends");
+  //if(!kdt_)
+  //{
+  //  ROS_DEBUG("kdt_ is NULL. MixmclNode() ends");
+  //  buildDensityTree(pf_, kdt_, loch_, orih_);
+  //}
+  //else
+  //  ROS_DEBUG("kdt_ is not NULL. MixmclNode() ends");
 }
 
 void MixmclNode::RCCB()
 {
   ROS_INFO("MixmclNode::RCCB() is called. Build density tree..");
-  buildDensityTree(pf_, kdt_, loch_, orih_);
+  //buildDensityTree(pf_, kdt_, loch_, orih_);
   delete laser_scan_filter_;
   laser_scan_filter_ = 
           new tf::MessageFilter<sensor_msgs::LaserScan>(*laser_scan_sub_, 
@@ -106,8 +125,8 @@ void MixmclNode::reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level)
   //which corresponds to startup dsrv2_->setCallback(cb2)
   if(first_reconfigureCB2_call_)
   {
-    ROS_INFO("first reconfigureCB2. Build density tree...");
-    buildDensityTree(pf_, kdt_, loch_, orih_);
+    //ROS_INFO("first reconfigureCB2. Build density tree...");
+    //buildDensityTree(pf_, kdt_, loch_, orih_);
     first_reconfigureCB2_call_ = false;
     default_config2_ = config;
     return;
@@ -117,8 +136,8 @@ void MixmclNode::reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level)
   ROS_DEBUG("MixmclNode::reconfigureCB2(...)");
   ita_ = config.dual_normalizer_ita;
   mixing_rate_ = config.mixing_rate;
-  loch_ = config.position_bandwidth;
-  orih_ = config.oriantation_bandwidth;
+  loch_ = config.dual_loc_bandwidth;
+  orih_ = config.dual_ori_bandwidth;
 
   //reinitialize kdtrees for dual MCL sampling
   if( fxres_!=config.feature_resolution_x || 
@@ -139,76 +158,13 @@ MixmclNode::~MixmclNode()
   delete laser_scan_filter_;
 }
 
-//TODO make static in MCL
-void MixmclNode::publishCloud(pf_sample_set_t* set)
-{
-  // Publish the resulting cloud
-  geometry_msgs::PoseArray cloud_msg;
-  cloud_msg.header.stamp = ros::Time::now();
-  cloud_msg.header.frame_id = global_frame_id_;
-  cloud_msg.poses.resize(set->sample_count);
-  for(int i=0;i<set->sample_count;i++)
-  {
-    tf::poseTFToMsg(
-      tf::Pose(
-        tf::createQuaternionFromYaw(
-          set->samples[i].pose.v[2]),
-        tf::Vector3(
-          set->samples[i].pose.v[0],
-          set->samples[i].pose.v[1], 
-          0)),
-        cloud_msg.poses[i]);
-  }
-  particlecloud_pub_.publish(cloud_msg);
-  
-}
-
-void MixmclNode::publishCloud2(pf_sample_set_t* set)
-{
-//  pf_sample_set_t* set = pf_->sets + (pf_->current_set + 1)%2;
-  geometry_msgs::PoseArray cloud_msg;
-  cloud_msg.header.stamp = ros::Time::now();
-  cloud_msg.header.frame_id = global_frame_id_;
-  cloud_msg.poses.resize(set->sample_count);
-  for(int i = 0 ; i < set->sample_count ; ++i)
-  {
-    tf::poseTFToMsg(
-      tf::Pose(
-        tf::createQuaternionFromYaw(
-          set->samples[i].pose.v[2]),
-        tf::Vector3(
-          set->samples[i].pose.v[0],
-          set->samples[i].pose.v[1], 
-          0)),
-      cloud_msg.poses[i]);
-  }
-  particlecloud2_pub_.publish(cloud_msg);
-}
-
-//move set_b to set_a
-void MixmclNode::combineSets()
-{
-  pf_sample_set_t* set_a = pf_->sets + pf_->current_set;
-  pf_sample_set_t* set_b = pf_->sets + (pf_->current_set + 1) % 2;
-  pf_sample_t* sample_a;
-  pf_sample_t* sample_b;
-  assert((set_a->sample_count + set_b->sample_count)<=max_particles_);
-  for(int i = 0; i < set_b->sample_count ; ++i)
-  {
-    sample_a = set_a->samples + set_a->sample_count + i;
-    sample_b = set_b->samples + i;
-    sample_a->pose = sample_b->pose;
-    sample_a->weight = sample_b->weight;
-  }
-  set_a->sample_count += set_b->sample_count;
-  set_b->sample_count = 0;
-}
-
 //move regular MCL samples in set_a with probability of 1-phi into set_b
 void MixmclNode::mixtureProposals()
 {
-  pf_sample_set_t* set_a = pf_->sets + pf_->current_set;
-  pf_sample_set_t* set_b = pf_->sets + (pf_->current_set + 1) % 2;
+  const int set_a_idx = pf_->current_set;
+  const int set_b_idx = (pf_->current_set + 1) % 2;
+  pf_sample_set_t* set_a = pf_->sets + set_a_idx;
+  pf_sample_set_t* set_b = pf_->sets + set_b_idx;
   pf_sample_t* sample_a;
   pf_sample_t* sample_b;
   set_b->sample_count = 0;
@@ -234,16 +190,18 @@ void MixmclNode::mixtureProposals()
   set_a->sample_count = set_a->sample_count - set_b->sample_count;
 
   //let regular MCL of set_b be the current set
-  pf_->current_set = (pf_->current_set + 1) % 2;
+  pf_->current_set = set_b_idx;
 }
 
 void
 MixmclNode::createKCGrid()
 {
   try
-  { 
+  {
+    ROS_INFO("Building KCGrid... It might take a some time depending on file size");
     //if the file doesn't exist, it shall throw exception
-    kcgrid_.reset(new KCGrid(fxres_, fyres_, fdres_, sample_param_filename_) );
+    kcgrid_.reset(new KCGrid(fxres_, fyres_, fdres_, sample_param_filename_, loch_, orih_) );
+    ROS_INFO("Finished building KCGrid.");
   }
   catch(const std::exception& e)
   {
@@ -353,17 +311,23 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 
   pf_vector_t delta = pf_vector_zero();
   pf_vector_t inverse_delta = pf_vector_zero();
+  amcl::AMCLOdomData odata;
+  amcl::AMCLOdomData inverse_odata;
 
   if(pf_init_)
   {
     // Compute change in pose
-    //delta = pf_vector_coord_sub(pose, pf_odom_pose_);
     delta.v[0] = pose.v[0] - pf_odom_pose_.v[0];
     delta.v[1] = pose.v[1] - pf_odom_pose_.v[1];
     delta.v[2] = angle_diff(pose.v[2], pf_odom_pose_.v[2]);
+    odata.pose = pose;
+    odata.delta = delta;
+    //inverse odata
     inverse_delta.v[0] = pf_odom_pose_.v[0] - pose.v[0];
     inverse_delta.v[1] = pf_odom_pose_.v[1] - pose.v[1];
     inverse_delta.v[2] = angle_diff(pf_odom_pose_.v[2], pose.v[2]);
+    inverse_odata.pose = pose;
+    inverse_odata.delta = inverse_delta;
 
     // See if we should update the filter
     bool update = fabs(delta.v[0]) > d_thresh_ ||
@@ -378,38 +342,43 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
         lasers_update_[i] = true;
   }
 
+  //before resample step, set_a_idx and set_b_idx will not be exchanged.
+  const int set_a_idx = pf_->current_set;
+  const int set_b_idx = (pf_->current_set + 1) % 2;
+
   bool force_publication = false;
   if(!pf_init_)
   {
     // Pose at last filter update
     pf_odom_pose_ = pose;
-
     // Filter is now initialized
     pf_init_ = true;
-
     // Should update sensor data
     for(unsigned int i=0; i < lasers_update_.size(); i++)
       lasers_update_[i] = true;
-
     force_publication = true;
-
     resample_count_ = 0;
-
+    //build a density tree based on set_a
+    //because set_a is just initialized
+    //TODO remove buildDensityTree from other functions.
+    assert(pf_->sets[set_a_idx].sample_count!=0);//in case resample functions assign zero to the sample count
+    buildDensityTree(pf_, kdt_, loch_, orih_);
     // using mixing_rate_ to seperate current set into two sets,
     // current set for regular MCL and another set for dual MCL
     mixtureProposals();
-
   }
   // If the robot has moved, update the filter
   else if(pf_init_ && lasers_update_[laser_index])
   {
-    amcl::AMCLOdomData odata;
-    odata.pose = pose;
-    // HACK
-    // Modify the delta in the action data so the filter gets
-    // updated correctly
-    odata.delta = delta;
-
+    //build a density tree based on set_b
+    //set_a is resampled set
+    //set_b is weighted set
+    //before building the tree, let set_b takes account for odata
+    pf_->current_set = set_b_idx;
+    assert(pf_->sets[set_b_idx].sample_count!=0);//in case resample functions assign zero to the sample count
+    odom_->UpdateAction(pf_, (amcl::AMCLSensorData*)&odata);
+    buildDensityTree(pf_, kdt_, loch_, orih_);
+    pf_->current_set = set_a_idx;
     // using mixing_rate_ to seperate current set into two sets,
     // current set for regular MCL and another set for dual MCL
     mixtureProposals();
@@ -424,166 +393,27 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   if(lasers_update_[laser_index])
   {
     amcl::AMCLLaserData ldata;
-    ldata.sensor = lasers_[laser_index];
-    ldata.range_count = laser_scan->ranges.size();
+    MCL::createLaserData(laser_index, ldata, laser_scan);
+    double total =  dualmclNEvaluation(ldata, inverse_odata);
+    double w_avg = pf_normalize(pf_, total);
 
-    // To account for lasers that are mounted upside-down, we determine the
-    // min, max, and increment angles of the laser in the base frame.
-    //
-    // Construct min and max angles of laser, in the base_link frame.
-    tf::Quaternion q;
-    q.setRPY(0.0, 0.0, laser_scan->angle_min);
-    tf::Stamped<tf::Quaternion> min_q(q, laser_scan->header.stamp,
-                                      laser_scan->header.frame_id);
-    q.setRPY(0.0, 0.0, laser_scan->angle_min + laser_scan->angle_increment);
-    tf::Stamped<tf::Quaternion> inc_q(q, laser_scan->header.stamp,
-                                      laser_scan->header.frame_id);
-    try
-    {
-      tf_->transformQuaternion(base_frame_id_, min_q, min_q);
-      tf_->transformQuaternion(base_frame_id_, inc_q, inc_q);
-    }
-    catch(tf::TransformException& e)
-    {
-      ROS_WARN("Unable to transform min/max laser angles into base frame: %s",
-               e.what());
-      return;
-    }
-
-    double angle_min = tf::getYaw(min_q);
-    double angle_increment = tf::getYaw(inc_q) - angle_min;
-
-    // wrapping angle to [-pi .. pi]
-    angle_increment = fmod(angle_increment + 5*M_PI, 2*M_PI) - M_PI;
-
-    ROS_DEBUG("Laser %d angles in base frame: min: %.3f inc: %.3f", laser_index, angle_min, angle_increment);
-
-    // Apply range min/max thresholds, if the user supplied them
-    if(laser_max_range_ > 0.0)
-      ldata.range_max = std::min(laser_scan->range_max, (float)laser_max_range_);
-    else
-      ldata.range_max = laser_scan->range_max;
-    double range_min;
-    if(laser_min_range_ > 0.0)
-      range_min = std::max(laser_scan->range_min, (float)laser_min_range_);
-    else
-      range_min = laser_scan->range_min;
-    // The AMCLLaserData destructor will free this memory
-    ldata.ranges = new double[ldata.range_count][2];
-    ROS_ASSERT(ldata.ranges);
-    for(int i=0;i<ldata.range_count;i++)
-    {
-      // amcl doesn't (yet) have a concept of min range.  So we'll map short
-      // readings to max range.
-      if(laser_scan->ranges[i] <= range_min)
-        ldata.ranges[i][0] = ldata.range_max;
-      else
-        ldata.ranges[i][0] = laser_scan->ranges[i];
-      // Compute bearing
-      ldata.ranges[i][1] = angle_min +
-              (i * angle_increment);
-    }
-
-    double regular_set_total = lasers_[laser_index]->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
-
-/////////////////////Dual MCL//////////////////
-    //Now, evaluation of regualr MCL has been performed for current set.
-    //Start to perform Mixture MCL for another set.
-    //First, based on ldata and pre-built density trees, generate samples and store them in set_b.
-    pf_->current_set = (pf_->current_set + 1) % 2;
-    pf_sample_set_t* set_dualmcl = pf_->sets + pf_->current_set;
-    //convert ldata to features, x, y, and dist.
-    laser_feature_t feature = polygonCentroid(ldata);
-    //get the corresponding tree from the pre-built density trees.
-    stringstream ss;
-    boost::shared_ptr<KernelCollection> tree = kcgrid_->getTree(feature.x, feature.y, feature.dist, ss);
-    ROS_DEBUG_STREAM(ss);
-    //drawing samples from the pre-built tree
-    int i = 0;
-    KernelCollection::const_sample_iterator iter = as_const(*(tree.get())).sampleBegin(set_dualmcl->sample_count);
-    for(; iter != iter.end(); ++iter, ++i)
-    {
-      // *iter returns a reference to a datapoint/kernel of tree
-      // iter.index() returns the index (in tree) of that element.
-      std::auto_ptr<kernel::se3> se3_pose = (*iter).polySe3Sample();
-      //convert kernel base se3_pose into pf_vecter_t.
-      pf_vector_t vec_pose;
-      se3ToPose(*se3_pose, vec_pose); 
-      set_dualmcl->samples[i].pose = vec_pose;
-    }
-
-    //Second, apply inverse motion sampling.
-    //inverse odata
-    amcl::AMCLOdomData inverse_odata;
-    inverse_odata.pose = pose;
-    inverse_odata.delta = inverse_delta;
-    //updateOdometry on set_dualmcl
-    odom_->UpdateAction(pf_, (amcl::AMCLSensorData*)&inverse_odata);
-    //Third, calculate importance factors for these samples.
-    pf_sample_t* dual_sample;
-    double dual_set_total = 0;
-    //KernelCollection samplesForEval;
-    for(int i = 0 ; i < set_dualmcl->sample_count ; ++i)
-    {
-      dual_sample = set_dualmcl->samples + i;
-      pf_vector_t vec_pose = dual_sample->pose;
-
-      //convert pose to se3 and accees the noralizer ita_
-      kernel::se3 se3_pose;
-      MixmclNode::poseToSe3(vec_pose, se3_pose);
-      dual_sample->weight = kdt_->evaluationAt(se3_pose);
-      dual_sample->weight *= ita_;
-      dual_set_total += dual_sample->weight;
-    }
-
-    pf_->current_set = (pf_->current_set + 1) % 2;
-    //publish the particle cloud
-    //note that this cloud has been applied the inverse odata.
-    pf_sample_set_t* set = pf_->sets + (pf_->current_set + 1)%2;
-    publishCloud2(set);
-    //Finally, combine the set together
-    combineSets();
-    //Build the density tree based on the weighted particles
-    buildDensityTree(pf_, kdt_, loch_, orih_);
-///////////////////////////////////////////////
-    double total = dual_set_total + regular_set_total;
-    set = pf_->sets + pf_->current_set;
-    double w_avg = pf_normalize(set, total);
-    //useless
-    //pf_update_augmented_weight(pf_, w_avg);
     lasers_update_[laser_index] = false;
-
     pf_odom_pose_ = pose;
 
     // Resample the particles
     if(!(++resample_count_ % resample_interval_) || 
         (force_publication ==true && sent_first_transform_ == false))
     {
-      pf_update_resample_pure_KLD(pf_);
+      //pf_update_resample_lowvariance(pf_);
+      //pf_update_resample_kld(pf_);
+      resample_function_(pf_);
       resampled = true;
     }
 
-    set = pf_->sets + pf_->current_set;
-    ROS_DEBUG("Num samples: %d\n", set->sample_count);
+    ROS_DEBUG("Num samples: %d\n", pf_->sets[pf_->current_set].sample_count);
     // Publish the resulting cloud
     if (!m_force_update) 
-      //publishCloud(set);
-      MCL::publishParticleCloud(particlecloud_pub_, set, global_frame_id_);
-    //if (!m_force_update) 
-    //{
-    //  geometry_msgs::PoseArray cloud_msg;
-    //  cloud_msg.header.stamp = ros::Time::now();
-    //  cloud_msg.header.frame_id = global_frame_id_;
-    //  cloud_msg.poses.resize(set->sample_count);
-    //  for(int i=0;i<set->sample_count;i++)
-    //  {
-    //    tf::poseTFToMsg(tf::Pose(tf::createQuaternionFromYaw(set->samples[i].pose.v[2]),
-    //                             tf::Vector3(set->samples[i].pose.v[0],
-    //                                       set->samples[i].pose.v[1], 0)),
-    //                    cloud_msg.poses[i]);
-    //  }
-    //  particlecloud_pub_.publish(cloud_msg);
-    //}
+      MCL::publishParticleCloud(particlecloud_pub_, global_frame_id_, pf_);
   }//endif(lasers_update_[laser_index])
 
   if(resampled || force_publication)
@@ -723,5 +553,63 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     }
   }
 
+}
+
+double MixmclNode::dualmclNEvaluation(amcl::AMCLLaserData& ldata, amcl::AMCLOdomData& inverse_odata)
+{
+  const int set_a_idx = pf_->current_set;
+  const int set_b_idx = (pf_->current_set + 1 ) % 2;
+  pf_sample_set_t* set_a = pf_->sets + set_a_idx;
+  pf_sample_set_t* set_b = pf_->sets + set_b_idx;
+  pf_sample_t* sample_a;
+  pf_sample_t* sample_b;
+  double dual_set_total = 0;
+  pf_->current_set = set_a_idx;
+  double regular_set_total = ldata.sensor->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
+
+  //Now, evaluation of regualr MCL has been performed for current set.
+  //Start to perform Mixture MCL for another set.
+  //First, based on ldata and pre-built density trees, generate samples and store them in set_b.
+  //convert ldata to features, x, y, and dist.
+  laser_feature_t feature = polygonCentroid(ldata);
+  //get the corresponding tree from the pre-built density trees.
+  stringstream ss;
+  boost::shared_ptr<KernelCollection> tree = kcgrid_->getTree(feature.x, feature.y, feature.dist, ss);
+  ROS_DEBUG_STREAM(ss);
+  //drawing samples from the pre-built tree into set_b
+  KernelCollection::const_sample_iterator iter = as_const(*(tree.get())).sampleBegin(set_b->sample_count);
+  for(int i = 0; iter != iter.end(); ++iter, ++i)
+  {
+    // *iter returns a reference to a datapoint/kernel of tree
+    // iter.index() returns the index (in tree) of that element.
+    std::auto_ptr<kernel::se3> se3_pose = (*iter).polySe3Sample();
+    //convert kernel base se3_pose into pf_vecter_t.
+    pf_vector_t vec_p;
+    se3ToPose(*se3_pose, vec_p);
+    set_b->samples[i].pose = vec_p;
+    //Third, calculate importance factors for these samples.
+    sample_b = set_b->samples + i;
+    //convert pose to se3 and accees the noralizer ita_
+    sample_b->weight = ita_ * kdt_->evaluationAt(*se3_pose);
+    dual_set_total += sample_b->weight;
+  }
+
+  //publish the particle cloud
+  //note that this cloud has been applied the inverse odata.
+  pf_->current_set = set_b_idx;
+  MCL::publishParticleCloud(particlecloud2_pub_, global_frame_id_, pf_);
+  //Finally, combine the set together into set_a
+  assert((set_a->sample_count + set_b->sample_count)<=max_particles_);
+  for(int i = 0; i < set_b->sample_count ; ++i)
+  {
+    sample_a = set_a->samples + set_a->sample_count + i;
+    sample_b = set_b->samples + i;
+    sample_a->pose = sample_b->pose;
+    sample_a->weight = sample_b->weight;
+  }
+  set_a->sample_count += set_b->sample_count;
+  set_b->sample_count = 0;
+  pf_->current_set = set_a_idx;
+  return dual_set_total + regular_set_total;
 }
 

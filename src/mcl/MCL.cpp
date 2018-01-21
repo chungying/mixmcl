@@ -95,11 +95,22 @@ MCL<D>::MCL() :
   private_nh_.param("recovery_alpha_slow", alpha_slow_, 0.001);
   private_nh_.param("recovery_alpha_fast", alpha_fast_, 0.1);
   private_nh_.param("tf_broadcast", tf_broadcast_, true);
-  {
-    double bag_scan_period;
-    private_nh_.param("bag_scan_period", bag_scan_period, -1.0);
-    bag_scan_period_.fromSec(bag_scan_period);
-  }
+  double bag_scan_period;
+  private_nh_.param("bag_scan_period", bag_scan_period, -1.0);
+  bag_scan_period_.fromSec(bag_scan_period);
+
+  //resmaple options, augmented, KLD, low-variance
+  private_nh_.param("resample_type", tmp_model_type, std::string("kld"));
+  if(tmp_model_type == "kld")
+    resample_function_ = &pf_update_resample_kld;
+  else if(tmp_model_type == "lowvariance")
+    resample_function_ = &pf_update_resample_lowvariance;
+  else if(tmp_model_type == "augmented")
+    resample_function_ = &pf_update_resample;
+  else
+    resample_function_ = &pf_update_resample_kld;
+     
+
 
   MCL::updatePoseFromServer();
 
@@ -118,7 +129,7 @@ MCL<D>::MCL() :
                       this);
 
   //generic subscribers
-  laser_scan_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(nh_, scan_topic_, 100);
+  laser_scan_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(nh_, scan_topic_, 1);
   initial_pose_sub_ = nh_.subscribe("initialpose", 2, &MCL::initialPoseReceived, this);
 
   if(use_map_topic_) {
@@ -139,6 +150,18 @@ MCL<D>::MCL() :
   laser_check_interval_ = ros::Duration(15.0);
   check_laser_timer_ = nh_.createTimer(laser_check_interval_, 
                                        boost::bind(&MCL<D>::checkLaserReceived, this, _1));
+
+  private_nh_.param("global_localization", global_localization_, false);
+  if(global_localization_)
+  {
+    ROS_INFO("Initializing with uniform distribution");
+    pf_init_model(pf_, (pf_init_model_fn_t)MCL::uniformPoseGenerator,
+                  (void *)map_);
+
+    ROS_INFO("Global initialisation done!");
+    pf_init_ = false;
+  }
+  this->printInfo();
 }
 
 template<class D>
@@ -693,7 +716,6 @@ MCL<D>::globalLocalizationCallback(std_srvs::Empty::Request& req,
   ROS_INFO("Global initialisation done!");
   pf_init_ = false;
 
-  //move build_density_tree to Derived::globalLocalizationCB()
   static_cast<D*>(this)->GLCB();
   return true;
 }
@@ -863,5 +885,62 @@ MCL<D>::uniformPoseGenerator(void* arg)
   }
 #endif
   return p;
+}
+
+template<class D>
+void 
+MCL<D>::createLaserData(int laser_index, amcl::AMCLLaserData& ldata, const sensor_msgs::LaserScanConstPtr& laser_scan)
+{
+  /*
+    TransformListenerWrapper* tf_
+    double laser_max_range_
+    double laser_min_range_
+    string base_frame_id_
+  */
+  ldata.sensor = lasers_[laser_index];
+  ldata.range_count = laser_scan->ranges.size();
+  tf::Quaternion q;
+  q.setRPY(0.0, 0.0, laser_scan->angle_min);
+  tf::Stamped<tf::Quaternion> min_q(q, laser_scan->header.stamp,
+                                    laser_scan->header.frame_id);
+  q.setRPY(0.0, 0.0, laser_scan->angle_min + laser_scan->angle_increment);
+  tf::Stamped<tf::Quaternion> inc_q(q, laser_scan->header.stamp,
+                                    laser_scan->header.frame_id);
+  try
+  {
+    tf_->transformQuaternion(base_frame_id_, min_q, min_q);
+    tf_->transformQuaternion(base_frame_id_, inc_q, inc_q);
+  }
+  catch(tf::TransformException& e)
+  {
+    ROS_WARN("Unable to transform min/max laser angles into base frame: %s",
+             e.what());
+    return;
+  }
+  double angle_min = tf::getYaw(min_q);
+  double angle_increment = tf::getYaw(inc_q) - angle_min;
+  angle_increment = fmod(angle_increment + 5*M_PI, 2*M_PI) - M_PI;
+  //ROS_DEBUG("Laser %d angles in base frame: min: %.3f inc: %.3f", laser_index, angle_min, angle_increment);
+  if(laser_max_range_ > 0.0)
+    ldata.range_max = std::min(laser_scan->range_max, (float)laser_max_range_);
+  else
+    ldata.range_max = laser_scan->range_max;
+  double range_min;
+  if(laser_min_range_ > 0.0)
+    range_min = std::max(laser_scan->range_min, (float)laser_min_range_);
+  else
+    range_min = laser_scan->range_min;
+  ldata.ranges = new double[ldata.range_count][2];
+  ROS_ASSERT(ldata.ranges);
+  for(int i=0;i<ldata.range_count;i++)
+  {
+    if(laser_scan->ranges[i] <= range_min)
+      ldata.ranges[i][0] = ldata.range_max;
+    else
+      ldata.ranges[i][0] = laser_scan->ranges[i];
+    // Compute bearing
+    ldata.ranges[i][1] = angle_min +
+            (i * angle_increment);
+  }
 }
 

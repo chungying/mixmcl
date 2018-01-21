@@ -32,9 +32,11 @@ class KCGrid
     typedef std::map<size_t, ConstTreePtr> ConstTreeMap;
     typedef ::flann::L2_Simple<float> Dist;
     typedef ::flann::Index<Dist> FLANNIndex;
-    void testPrint( int i );
-
-    KCGrid(size_t X, size_t Y, size_t D, std::string& para_file);
+    //void testPrint( int i );
+    //TODO 
+    KCGrid(size_t X, size_t Y, size_t D, std::string& para_file, std::pair<double, double>& mapx, std::pair<double, double>& mapy, double loch = 10, double orih = 0.4)
+:KCGrid(X, Y, D, para_file, loch, orih){mapx_=mapx; mapy_=mapy;};
+    KCGrid(size_t X, size_t Y, size_t D, std::string& para_file, double loch = 10, double orih = 0.4);
 
     KCGrid(size_t X, size_t Y, size_t D, std::map<std::string, boost::any>& m);
 
@@ -68,6 +70,7 @@ class KCGrid
     size_t X, Y, D;
     size_t max_size_, data_count_;
     std::pair<float,float> xlim, ylim, dlim;
+    std::pair<double, double> mapx_, mapy_;
     std::vector<TreeMap::key_type> gridcell_indices_;
     boost::shared_ptr<float> data_matrix_;
     boost::shared_ptr<FLANNIndex> flann_index_;
@@ -77,7 +80,11 @@ class KCGrid
 
     bool assignLimits( const std::map<std::string, boost::any>& m);
 
-    void convert(std::map<std::string, boost::any>& m);
+    //TODO 
+    //std::string& getDataFilename( const std::map<std::string, boost::any>& m);
+    //void convert(const std::string& datafilename, double loch = 10, double orih = 0.4);
+
+    void convert(std::map<std::string, boost::any>& m, double loch = 10, double orih = 0.4);
 
     size_t nnSearch(float x, float y, float d);
     size_t nnSearch(float x, float y, float d, ostream& out);

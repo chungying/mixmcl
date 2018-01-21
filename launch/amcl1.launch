@@ -19,8 +19,8 @@
     <param name="initial_pose_a" value="$(arg init_a)"/>
     <param name="max_particles" value="$(arg max_particles)" />
     <param name="global_localization" value="$(arg global_localization)"/>
+    <param name="resample_interval" value="1"/>
     <!--
-    <param name="resample_interval" value="2"/>
     -->
   </node>
 </launch>

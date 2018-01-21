@@ -5,19 +5,19 @@ using namespace std;
 using namespace paramio;
 using namespace dataio;
 
-void KCGrid::testPrint( int i )
-{
-  if(tree_map_.find(i) == tree_map_.end())
-  {
-    cout << i << "-th tree has no data." << endl;
-  }
-  else
-  {
-    cout << i << "-th tree has "  << tree_map_[i]->size() << " data." << endl;
-  }
-}
+//void KCGrid::testPrint( int i )
+//{
+//  if(tree_map_.find(i) == tree_map_.end())
+//  {
+//    cout << i << "-th tree has no data." << endl;
+//  }
+//  else
+//  {
+//    cout << i << "-th tree has "  << tree_map_[i]->size() << " data." << endl;
+//  }
+//}
 
-KCGrid::KCGrid(size_t X, size_t Y, size_t D, string& para_file)
+KCGrid::KCGrid(size_t X, size_t Y, size_t D, string& para_file, double loch, double orih)
 :X(X), Y(Y), D(D), max_size_(X*Y*D), data_count_(0)
 {
   scoped_ptr<ParamIn> param(new ParamIn(para_file));
@@ -29,12 +29,11 @@ KCGrid::KCGrid(size_t X, size_t Y, size_t D, string& para_file)
     throw runtime_error(ss.str());
   }
   assignLimits(param->map_);
-  convert(param->map_);
+  convert(param->map_, loch, orih);
 }
 
-KCGrid::KCGrid(size_t X, size_t Y, size_t D
-      ,map<string, any>& m)
-:X(X), Y(Y), D(D), max_size_(X*Y*D), data_count_(0)
+KCGrid::KCGrid(size_t X, size_t Y, size_t D, map<string, any>& m)
+:X(X), Y(Y), D(D), max_size_(X*Y*D), data_count_(0), mapx_(), mapy_()
 {
   if(m.size()==0)
     throw runtime_error("wrong parameters for KCGrid::KCGrid(..., map<string, any>)");
@@ -42,8 +41,7 @@ KCGrid::KCGrid(size_t X, size_t Y, size_t D
   convert(m);
 }
 
-KCGrid::KCGrid(size_t X, size_t Y, size_t D
-      , ParamIn& param)
+KCGrid::KCGrid(size_t X, size_t Y, size_t D, ParamIn& param)
 :X(X), Y(Y), D(D), max_size_(X*Y*D), data_count_(0)
 {
   if(param.map_.size()==0)
@@ -107,6 +105,7 @@ void KCGrid::assignLimits(
   xlim = make_pair(xmin, xmax);
   ylim = make_pair(ymin, ymax);
   dlim = make_pair(dmin, dmax);
+  //TODO assign maplimx, maplimy
 }
 
 bool KCGrid::assignLimits( const map<string, any>& m)
@@ -157,7 +156,8 @@ inline float KCGrid::disc2cont(size_t grid_index, const pair<float, float>& lim,
          lim.first;
 }
 
-void KCGrid::convert(map<string, any>& m)
+//void KCGrid::convert(const std::string& datafilename, double loch, double orih)
+void KCGrid::convert(map<string, any>& m, double loch, double orih)
 {
   string datafilename;
   try
@@ -182,6 +182,8 @@ void KCGrid::convert(map<string, any>& m)
     throw runtime_error(ss.str());
   }
 
+  //TODO wrap the following code
+  //reading data into trees
   scoped_ptr<DataIn> datain_ptr_;
   datain_ptr_.reset(new DataIn(datafilename));
   pf_vector_t p;
@@ -190,6 +192,9 @@ void KCGrid::convert(map<string, any>& m)
   tf::Vector3 v;
   size_t idx;
   data_count_ = 0;
+  //TODO filter out the pose locate within the map region
+  //because sometimes smaller map will be used instead of the original large map.
+  //this requires minx, maxx, miny, maxy in meters
   while(datain_ptr_->readALine(p, f))
   {
     ++data_count_;
@@ -232,9 +237,8 @@ void KCGrid::convert(map<string, any>& m)
   {
     //set kernel bandwidth
     //normaliize kdts
-
-    it->second->setKernelLocH(10);
-    it->second->setKernelOriH(.4);
+    it->second->setKernelLocH(loch);
+    it->second->setKernelOriH(orih);
     it->second->normalizeWeights();
     it->second->totalWeight();
     it->second->buildKdTree();

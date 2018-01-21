@@ -2,58 +2,14 @@
 #include "mcl/MCL.cpp"
 template class MCL<SamplingNode>;
 
-void SamplingNode::raycasting(
-    amcl::AMCLLaser* self,
-    const pf_vector_t rpose, 
-    const int range_count,
-    const double range_max,
-    const double range_min,
-    const double angle_min,
-    const double angle_increment,
-    amcl::AMCLLaserData& ldata)
-{
-  // 2.3 laser sensor information
-  //angle_min lamin
-  //angle_max lamax
-  //angle_increment lares
-  //range_min lrmin
-  //range_max lrmax
-  //range_count lrnum
-  ldata.range_count = range_count;
-  ldata.range_max = range_max;
-
-  // 2.2 retreive occupancy grid map
-  // self->map
-  ldata.sensor = self;
-  // Take account of the laser pose relative to the robot
-  pf_vector_t lpose = pf_vector_coord_add(self->laser_pose, rpose);
-  // 2.4 ray-casting for each beam
-  ldata.ranges = new double[ldata.range_count][2];
-  double map_range;
-  for (int i = 0; i < ldata.range_count; ++i)
-  {
-    ldata.ranges[i][1] = angle_min + (i * angle_increment);
-    // Compute the range according to the map
-    map_range = map_calc_range(
-                  self->map, 
-                  lpose.v[0], 
-                  lpose.v[1],
-                  lpose.v[2] + ldata.ranges[i][1], 
-                  range_max);
-    if(map_range <= range_min || map_range > range_max)
-      ldata.ranges[i][0] = range_max;
-    else
-      ldata.ranges[i][0] = map_range;
-  }
-  // 2.5 return AMCLLaserData ldata
-}
-
 SamplingNode::SamplingNode():
   MCL(),
-  laserUpdated(false),
+  laser_updated_(false),
   dataout_ptr_(),
   paramout_ptr_(),
-  data_count_(0)
+  data_count_(0),
+  tf_base_2_lms_(),
+  space_idx_(0)
 {
    boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
   //one text file for storing parameters and data file name.
@@ -87,6 +43,10 @@ SamplingNode::SamplingNode():
   if(!private_nh_.getParam("laser_noise", noise))
     noise = -1.0;
   private_nh_.param("max_data_count", max_data_count_, int(10000));
+  if(!private_nh_.getParam("tf_publishable", tf_publishable_))
+    tf_publishable_ = false;
+  if(!private_nh_.getParam("brute_force", brute_force_))
+    brute_force_ = false;
   //reset callback function to SamplingNode::laserReceived(...)
   ROS_INFO("reset laserReceived callback function");
   laser_scan_filter_ = 
@@ -100,25 +60,7 @@ SamplingNode::SamplingNode():
                           &SamplingNode::laserReceived, 
                           this, 
                           _1));
-}
-
-void
-SamplingNode::RCCB()
-{
-  boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
-  delete laser_scan_filter_;
-  ROS_INFO("reset laserReceived callback function");
-  laser_scan_filter_ = 
-              new tf::MessageFilter<sensor_msgs::LaserScan>(
-                    *laser_scan_sub_,
-                    *tf_,
-                    odom_frame_id_,
-                    100);
-  laser_scan_filter_->registerCallback(
-                        boost::bind(
-                          &SamplingNode::laserReceived, 
-                          this, 
-                          _1));
+  slms100_pub_ = nh_.advertise<sensor_msgs::LaserScan>("slms100", 100);
 }
 
 /*
@@ -131,7 +73,7 @@ void
 SamplingNode::sampling()
 {
   boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
-  if(!laserUpdated)
+  if(!laser_updated_)
   {
     ROS_INFO("Doesn't receive any laser scan information. Waiting for 1 sec...");
     ros::Duration(1).sleep();
@@ -139,7 +81,21 @@ SamplingNode::sampling()
   }
   // 1. random move
   //uniformly generate a Pose
-  pf_vector_t rpose = MCL::uniformPoseGenerator((void*)map_);
+  pf_vector_t rpose;
+  if(!brute_force_)
+    rpose = MCL::uniformPoseGenerator((void*)map_);
+  else
+  {
+    if((data_count_ % 10) == 0)
+    {
+      space_idx_++;// = space_idx_ % MCL::free_space_indices.size();
+    }
+    std::pair<int,int> free_point = MCL::free_space_indices[space_idx_-1];
+    ROS_DEBUG("space index: %d, map coord: [%d %d], free space size: %ld", space_idx_-1, free_point.first, free_point.second,MCL::free_space_indices.size());
+    rpose.v[0] = MAP_WXGX(map_, free_point.first);
+    rpose.v[1] = MAP_WYGY(map_, free_point.second);
+    rpose.v[2] = ((data_count_ % 10)/10.0)*2*M_PI - M_PI;
+  }
   // 2. ray-casting
   amcl::AMCLLaserData ldata;
   SamplingNode::raycasting(lasers_[0], rpose, lrnum, lrmax, lrmin, lamin, lares, ldata);
@@ -167,9 +123,69 @@ SamplingNode::sampling()
   // 4. record data
   this->data_count_++;
   dataout_ptr_->writeALine(rpose, lfeat);
-  if(data_count_ >= max_data_count_)
+  // 5. publish
+  if(tf_publishable_)
   {
+    // transfrom from map to slms100
+    try
+    {
+      tf::Stamped<tf::Pose> lms_to_map;
+      tf::Transform tmp_tf(tf::createQuaternionFromYaw(rpose.v[2]),
+                           tf::Vector3(rpose.v[0],
+                                       rpose.v[1],
+                                       0.0));
+      ros::Time transform_expiration = (ros::Time::now() +
+                                        transform_tolerance_);
+      tf::StampedTransform tf_map_2_odom_stamped(tmp_tf,
+                                          transform_expiration,
+                                          global_frame_id_, odom_frame_id_);
+      tf::StampedTransform tf_map_2_sbase_stamped(tmp_tf,
+                                          transform_expiration,
+                                          global_frame_id_, "sbase");
+      tf::StampedTransform tf_sbase_2_slms_stamped(tf_base_2_lms_,
+                                                 transform_expiration,
+                                                 "sbase", "slms100");
+      // publish the transform
+      this->tfb_->sendTransform(tf_map_2_odom_stamped);
+      this->tfb_->sendTransform(tf_map_2_sbase_stamped);
+      this->tfb_->sendTransform(tf_sbase_2_slms_stamped);
+    }
+    catch(tf::TransformException)
+    {
+      ROS_DEBUG("Failed to subtract base to odom transform");
+    }
+    // transform ldata to laserscan
+    sensor_msgs::LaserScan laser_scan;
+    laser_scan.header.seq = this->data_count_;
+    laser_scan.header.stamp = ros::Time::now();
+    laser_scan.header.frame_id = "slms100";
+    laser_scan.angle_min = lamin;
+    laser_scan.angle_max = lamax;
+    laser_scan.angle_increment = lares;
+    laser_scan.time_increment = 0;
+    laser_scan.scan_time = 0;
+    laser_scan.range_min = lrmin;
+    laser_scan.range_max = lrmax;
+    for(int i = 0 ; i < ldata.range_count ; ++i)
+    {
+      laser_scan.ranges.push_back((float)ldata.ranges[i][0]);
+      laser_scan.intensities.push_back(0.0f);
+    }
+    // publish laserscan
+    slms100_pub_.publish(laser_scan);
+  }
+  if( (!brute_force_ && data_count_ >= max_data_count_ ) 
+      || ( brute_force_ && space_idx_ > free_space_indices.size()/* || data_count_ >= 10000*/ ) ) 
     ros::shutdown();
+  else
+  {
+    double progress;
+    if(brute_force_)
+      progress = (space_idx_-1.0)/((double)free_space_indices.size());
+    else
+      progress = ((double)data_count_) / ((double)max_data_count_);
+    if(data_count_%10000 == 0 )
+      ROS_INFO("progress: %lf%%, data count: %d", progress*100, data_count_);
   }
   return ;
 }
@@ -201,6 +217,7 @@ SamplingNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       try
       {
         this->tf_->transformPose(base_frame_id_, ident, laser_pose);
+        //TODO publish this transform from sbase to slms100
       }
       catch(tf::TransformException& e)
       {
@@ -211,6 +228,19 @@ SamplingNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
         return;
       }
   
+      try
+      {
+        this->tf_->lookupTransform(base_frame_id_, laser_scan->header.frame_id, ros::Time(0), tf_base_2_lms_);
+      }
+      catch(tf::TransformException& e)
+      {
+        ROS_ERROR("Couldn't transform from %s to %s, "
+                  "even though the message notifier is in use",
+                  laser_scan->header.frame_id.c_str(),
+                  base_frame_id_.c_str());
+        return;
+      }
+
       pf_vector_t laser_pose_v;
       laser_pose_v.v[0] = laser_pose.getOrigin().x();
       laser_pose_v.v[1] = laser_pose.getOrigin().y();
@@ -294,7 +324,7 @@ SamplingNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     lares = laser_scan->angle_increment;
     lamin = laser_scan->angle_min;
     lamax = laser_scan->angle_max;
-    laserUpdated = true;
+    laser_updated_ = true;
   }
   catch(const tf::TransformException& ex)
   {
@@ -326,3 +356,69 @@ SamplingNode::~SamplingNode()
   //std::ofstream hold by them is deturcted in their destructors.
   delete laser_scan_filter_;
 }
+
+void SamplingNode::raycasting(
+    amcl::AMCLLaser* self,
+    const pf_vector_t& rpose, 
+    const int range_count,
+    const double range_max,
+    const double range_min,
+    const double angle_min,
+    const double angle_increment,
+    amcl::AMCLLaserData& ldata)
+{
+  // 2.3 laser sensor information
+  //angle_min lamin
+  //angle_max lamax
+  //angle_increment lares
+  //range_min lrmin
+  //range_max lrmax
+  //range_count lrnum
+  ldata.range_count = range_count;
+  ldata.range_max = range_max;
+
+  // 2.2 retreive occupancy grid map
+  // self->map
+  ldata.sensor = self;
+  // Take account of the laser pose relative to the robot
+  pf_vector_t lpose = pf_vector_coord_add(self->laser_pose, rpose);
+  // 2.4 ray-casting for each beam
+  ldata.ranges = new double[ldata.range_count][2];
+  double map_range;
+  for (int i = 0; i < ldata.range_count; ++i)
+  {
+    ldata.ranges[i][1] = angle_min + (i * angle_increment);
+    // Compute the range according to the map
+    map_range = map_calc_range(
+                  self->map, 
+                  lpose.v[0], 
+                  lpose.v[1],
+                  lpose.v[2] + ldata.ranges[i][1], 
+                  range_max);
+    if(map_range <= range_min || map_range > range_max)
+      ldata.ranges[i][0] = range_max;
+    else
+      ldata.ranges[i][0] = map_range;
+  }
+  // 2.5 return AMCLLaserData ldata
+}
+
+void
+SamplingNode::RCCB()
+{
+  boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
+  delete laser_scan_filter_;
+  ROS_INFO("reset laserReceived callback function");
+  laser_scan_filter_ = 
+              new tf::MessageFilter<sensor_msgs::LaserScan>(
+                    *laser_scan_sub_,
+                    *tf_,
+                    odom_frame_id_,
+                    100);
+  laser_scan_filter_->registerCallback(
+                        boost::bind(
+                          &SamplingNode::laserReceived, 
+                          this, 
+                          _1));
+}
+

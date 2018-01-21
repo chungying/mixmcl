@@ -42,22 +42,39 @@ class McmclNode : public MCL<McmclNode>
     };
     void RCCB();
    
-    static void clone(pf_sample_set_t* src, pf_sample_ptr_vector_t& dst);
-    static double evaluateMotionModel(const pf_vector_t& cur_p, const pf_vector_t& pre_p, const odom_model_t& omodel, amcl::AMCLOdom* odom_);
-
+    double metropolisNEvaluation(geometry_msgs::PoseArray& accepted_cloud, geometry_msgs::PoseArray& rejected_cloud, amcl::AMCLLaserData& ldata, double ita);
     void demcProposal(pf_sample_set_t* gene_pool, pf_sample_set_t* population);
 
-    pf_sample_ptr_vector_t set_c;  
+    //pf_sample_ptr_vector_t set_c;  
     double ita_;
     double gamma_;
     double loc_bw_, ori_bw_;
     double loch_, orih_;
     boost::shared_ptr<nuklei::KernelCollection> kdt_;
-    ros::Publisher particlecloud2_pub_;
+    ros::Publisher particlecloud2_pub_;//for accepted cloud
+    ros::Publisher particlecloud3_pub_;//for rejected cloud
     bool first_reconfigureCB2_call_;
+    bool version1_;
+    bool static_update_;
     dynamic_reconfigure::Server<mixmcl::MCMCLConfig> *dsrv2_;
     mixmcl::MCMCLConfig default_config2_;
     void reconfigureCB2(mixmcl::MCMCLConfig& config, uint32_t level);
+    //for map information
+    double map_min_x_;
+    double map_max_x_;
+    double map_min_y_;
+    double map_max_y_;
+    double map_rng_x_;
+    double map_rng_y_;
+    void printInfo()
+    {
+      ROS_INFO("ita: %f", ita_);
+      ROS_INFO("gamma: %f", gamma_);
+      ROS_INFO("loc_bw: %f", loc_bw_);
+      ROS_INFO("ori_bw: %f", ori_bw_);
+      ROS_INFO("loch: %f", loch_);
+      ROS_INFO("orih: %f", orih_);
+    };
 };
 
 #endif//MCMCLNODE_H

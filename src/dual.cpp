@@ -23,6 +23,8 @@ class DualNode : public MixmclNode
   protected:
     void laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan);
     void RCCB();
+    bool sampling_flag_;
+    ros::Publisher particlecloud3_pub_;
 };
 
 int main(int argc, char** argv)
@@ -38,7 +40,9 @@ int main(int argc, char** argv)
 
 DualNode::DualNode() : MixmclNode()
 {
-
+  if(!private_nh_.getParam("sampleing", sampling_flag_))
+    sampling_flag_ = false;
+  particlecloud3_pub_ = nh_.advertise<geometry_msgs::PoseArray>("particlecloud3", 2, true);
   boost::recursive_mutex::scoped_lock l(configuration_mutex_);
   if(laser_scan_filter_!=NULL)
     delete laser_scan_filter_;
@@ -181,12 +185,37 @@ void DualNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   std::stringstream ss;
   boost::shared_ptr<const KernelCollection> tree = kcgrid_->getTree(feature.x, feature.y, feature.dist, ss);
   ROS_DEBUG_STREAM(ss);
+
+  KernelCollection::const_sample_iterator siter = as_const(*(tree.get())).sampleBegin(tree->size());
+  geometry_msgs::PoseArray sampling_cloud;
+  sampling_cloud.header.stamp = ros::Time::now();
+  sampling_cloud.header.frame_id = global_frame_id_;
+  sampling_cloud.poses.resize(tree->size());
+  for(int i = 0; siter != siter.end(); ++siter, ++i)
+  {
+    // *iter returns a reference to a datapoint/kernel of tree
+    // iter.index() returns the index (in tree) of that element.
+    std::auto_ptr<kernel::se3> se3_pose = (*siter).polySe3Sample();
+    //convert kernel base se3_pose into pf_vecter_t.
+    pf_vector_t vec_pose;
+    se3ToPose(*se3_pose, vec_pose);
+    tf::poseTFToMsg(
+      tf::Pose(
+        tf::createQuaternionFromYaw(
+          vec_pose.v[2]),
+        tf::Vector3(
+          vec_pose.v[0],
+          vec_pose.v[1], 
+          0)),
+      sampling_cloud.poses[i]);
+  }
+
   KernelCollection::const_iterator iter = tree->begin();
   KernelCollection::const_iterator end = tree->end();
-  geometry_msgs::PoseArray cloud_msg;
-  cloud_msg.header.stamp = ros::Time::now();
-  cloud_msg.header.frame_id = global_frame_id_;
-  cloud_msg.poses.resize(tree->size());
+  geometry_msgs::PoseArray truth_cloud;
+  truth_cloud.header.stamp = ros::Time::now();
+  truth_cloud.header.frame_id = global_frame_id_;
+  truth_cloud.poses.resize(tree->size());
   for(int i = 0;iter != end ; ++iter, ++i)
   {
     kernel::se3 se3_pose(*iter);
@@ -200,9 +229,10 @@ void DualNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
           vec_pose.v[0],
           vec_pose.v[1], 
           0)),
-      cloud_msg.poses[i]);
+      truth_cloud.poses[i]);
   }
-  particlecloud2_pub_.publish(cloud_msg);
+  particlecloud2_pub_.publish(sampling_cloud);
+  particlecloud3_pub_.publish(truth_cloud);
   ROS_INFO("%lu particles correspond to feature x:%lf, y:%lf, d:%lf", tree->size(), feature.x, feature.y, feature.dist);
 
 }

@@ -10,6 +10,7 @@
 
 #include "amcl/map/map.h"
 #include "amcl/pf/pf.h"
+#include "amcl/pf/pf_resample.h"
 #include "amcl/sensors/amcl_odom.h"
 #include "amcl/sensors/amcl_laser.h"
 
@@ -119,8 +120,6 @@ class MCL
     tf::Transform latest_tf_;
     bool latest_tf_valid_;
 
-    // Pose-generating function used to uniformly distribute particles over
-    // the map
     static pf_vector_t uniformPoseGenerator(void* arg);
 #if NEW_UNIFORM_SAMPLING
     static std::vector<std::pair<int,int> > free_space_indices;
@@ -130,9 +129,11 @@ class MCL
 
     static void publishParticleCloud(
       ros::Publisher& particlecloud_pub_,
-      pf_sample_set_t* set, 
-      std::string& global_frame_id_);
+      std::string& global_frame_id_,
+      pf_t* pf_,
+      int set_drift);
 
+    void createLaserData(int laser_index, amcl::AMCLLaserData& ldata, const sensor_msgs::LaserScanConstPtr& laser_scan);
 
     // Callbacks
     bool globalLocalizationCallback(std_srvs::Empty::Request& req,
@@ -162,6 +163,7 @@ class MCL
     std::string base_frame_id_;
     std::string global_frame_id_;
 
+    bool global_localization_;
     bool use_map_topic_;
     bool first_map_only_;
 
@@ -193,7 +195,7 @@ class MCL
     int resample_count_;
     double laser_min_range_;
     double laser_max_range_;
-
+    void (*resample_function_)(pf_t* );
     //Nomotion update control
     bool m_force_update;  // used to temporarily let amcl update samples even when no motion occurs...
 
@@ -261,6 +263,26 @@ class MCL
     virtual void GLCB() = 0;
     virtual void AIP() = 0;
     virtual void RCCB() = 0;
+    void printInfo()
+    {
+      ROS_INFO("min_particles: %d", min_particles_);
+      ROS_INFO("max_particles: %d", max_particles_);
+      ROS_INFO("kld_err_: %f", pf_err_);
+      ROS_INFO("kld_z_: %f", pf_z_);
+      ROS_INFO("update_min_d: %f", d_thresh_);
+      ROS_INFO("update_min_a: %f", a_thresh_);
+      ROS_INFO("resample_interval_: %d", resample_interval_);
+      ROS_INFO("transform_tolerance: %f secs", transform_tolerance_.toSec());
+      ROS_INFO("recovery_alpha_slow: %f", alpha_slow_);
+      ROS_INFO("recovery_alpha_fast: %f", alpha_fast_);
+      ROS_INFO("save_pose_rate: %f secs", save_pose_period.toSec());
+      ROS_INFO("laser_max_beams: %d", max_beams_);
+      ROS_INFO("laser_min_range_: %f", laser_min_range_);
+      ROS_INFO("laser_max_range_: %f", laser_max_range_);
+      ROS_INFO("z: %f %f %f %f", z_hit_, z_short_, z_max_, z_rand_);
+      ROS_INFO("sigma lamda: %f %f", sigma_hit_, lambda_short_);
+      ROS_INFO("alphas: %f %f %f %f %f", alpha1_, alpha2_, alpha3_, alpha4_, alpha5_);
+    };
 };
 
 template<class D>
@@ -280,10 +302,12 @@ MCL<D>::getYaw(tf::Pose& t)
 template<class D>
 void MCL<D>::publishParticleCloud(
   ros::Publisher& particlecloud_pub_,
-  pf_sample_set_t* set, 
-  std::string& global_frame_id_)
+  std::string& global_frame_id_,
+  pf_t* pf_,
+  int set_shift = 0)
 {
   // Publish the resulting cloud
+  pf_sample_set_t* set = pf_->sets + ((pf_->current_set + set_shift) % 2); 
   geometry_msgs::PoseArray cloud_msg;
   cloud_msg.header.stamp = ros::Time::now();
   cloud_msg.header.frame_id = global_frame_id_;

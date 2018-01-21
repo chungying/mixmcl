@@ -6,7 +6,23 @@
 
 extern void pf_kdtree_clear(pf_kdtree_t *self);
 extern void pf_kdtree_insert(pf_kdtree_t *self, pf_vector_t pose, double value);
-void pf_update_resample_low_variance(pf_t* pf)
+
+void pf_update_without_resample(pf_t* pf)
+{
+  pf_sample_set_t *set_a, *set_b;
+  pf_sample_t *sample_a, *sample_b;
+  set_a = pf->sets + pf->current_set;
+  set_b = pf->sets + (pf->current_set + 1) % 2;
+  // Create the kd tree for adaptive sampling
+  pf_kdtree_clear(set_a->kdtree);
+  for(int i = 0 ; i < set_a->sample_count ; ++i)
+    pf_kdtree_insert(set_a->kdtree, set_a->samples[i].pose, set_a->samples[i].weight);
+  // Re-compute cluster statistics
+  pf_cluster_stats(pf, set_a);
+  pf_update_converged(pf);
+}
+
+void pf_update_resample_lowvariance(pf_t* pf)
 {
   pf_sample_set_t *set_a, *set_b;
   pf_sample_t *sample_a, *sample_b;
@@ -65,7 +81,7 @@ void pf_update_resample_low_variance(pf_t* pf)
   pf_update_converged(pf);
 }
 
-void pf_update_resample_pure_KLD(pf_t* pf)
+void pf_update_resample_kld(pf_t* pf)
 {
   int i;
   double total;
@@ -125,7 +141,7 @@ void pf_update_resample_pure_KLD(pf_t* pf)
     if (set_b->sample_count > pf_resample_limit(pf, set_b->kdtree->leaf_count))
       break;
   }
-  set_a->sample_count = 0;
+  //set_a->sample_count = 0;//removed due to these information is required fro building density tree
  
   // Normalize weights
   for (i = 0; i < set_b->sample_count; i++)

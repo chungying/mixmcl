@@ -3,13 +3,18 @@
 <launch>
   <env name="ROSCONSOLE_CONFIG_FILE" 
      value="$(find mixmcl)/config/custom_rosconsole.conf"/>
+  <arg name="gazebo" default="true" />
+  <arg name="rviz" default="true" />
   <arg name="scan" default="/p3dx/laser/scan" />
   <arg name="init_x" default="-9" />
   <arg name="init_y" default="8.4" />
   <arg name="init_a" default="0" />
   <arg name="odom_source" default="world" />
   <arg name="laser_noise" default="0.01" />
-  <arg name="max_data_count" default="10000" />
+  <arg name="max_data_count" default="100" />
+  <arg name="frequency" default="0.5" />
+  <arg name="tf_publishable" default="false" />
+  <arg name="brute_force" default="true" />
   <arg name="launch-prefix" default="" />
 
   <!---->
@@ -20,22 +25,24 @@
     <remap from="scan" to="$(arg scan)"/>
     <param name="max_data_count" value="$(arg max_data_count)"/>
     <param name="laser_noise" value="$(arg laser_noise)" />
+    <param name="frequency" value="$(arg frequency)" />
+    <param name="tf_publishable" value="$(arg tf_publishable)" />
+    <param name="brute_force" value="$(arg brute_force)" />
   </node>
 
   <!--P3DX in GAZEBO-->
-  <!--include file="$(find p3dx_gazebo)/launch/gazebo.launch">
+  <include file="$(find p3dx_gazebo)/launch/gazebo.launch" if="$(arg gazebo)">
     <arg name="gui" value="false"/>
     <arg name="init_x" value="$(arg init_x )"/>
     <arg name="init_y" value="$(arg init_y )"/>
     <arg name="init_a" value="$(arg init_a )"/>
     <arg name="odom_source" value="$(arg odom_source)"/>
     <arg name="laser_noise" value="$(arg laser_noise)"/>
-  </include-->
-  
-  <!--state publishers settins-->
-  <!--node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" /-->
-  <!--node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" /-->
-
+  </include>
+  <group if="$(arg rviz)">
+    <param name="robot_rviz" command="$(find xacro)/xacro.py '$(find p3dx_description)/urdf/pioneer3dx.xacro' base_frame:=sbase" />
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find p3dx_2dnav)/config/p3dx_2dnav.rviz" />
+  </group>
   <!--MAP SERVER-->
   <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
   <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_yaml)" />

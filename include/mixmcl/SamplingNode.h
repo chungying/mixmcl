@@ -17,7 +17,7 @@ class SamplingNode : public MCL<SamplingNode>
     void sampling();
     static void raycasting(
       amcl::AMCLLaser* self,
-      const pf_vector_t rpose, 
+      const pf_vector_t& rpose, 
       const int range_count,
       const double range_max,
       const double range_min,
@@ -59,7 +59,12 @@ class SamplingNode : public MCL<SamplingNode>
     double fdmax;//maximum distance laser feature
 
     int max_data_count_;
-    bool laserUpdated;
+    bool laser_updated_;
+    bool tf_publishable_;
+    bool brute_force_;
+    ros::Publisher slms100_pub_;
+    tf::StampedTransform tf_base_2_lms_;
+    unsigned int space_idx_;
 };
 
 const static std::string fp = "/fullpath";

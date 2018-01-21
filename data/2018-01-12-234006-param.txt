@@ -1,0 +1,14 @@
+databinaryfile  Ss /home/jolly/catkin_ws/src/mixmcl/data/2018-01-12-234006-data.bin
+datacount  d 8.00902e+06
+noise  d 0.01
+lrmin  d 0.1
+lrmax  d 30
+lares  d 0.00875098
+lamin  d -1.5708
+lamax  d 1.5708
+fxmin  d 0.0289069
+fxmax  d 19.8032
+fymin  d -19.9042
+fymax  d 19.9018
+fdmin  d 0.1333
+fdmax  d 30

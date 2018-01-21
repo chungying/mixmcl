@@ -3,25 +3,38 @@
 <launch>
   <env name="ROSCONSOLE_CONFIG_FILE" 
      value="$(find mixmcl)/config/custom_rosconsole.conf"/>
+  <arg name="suicide" default="false"/>
   <arg name="playbag" default="true"/>
-  <arg name="bagfile" default="/home/jolly/rosbag/2018-01-07-15-27-03-clean-filtered.bag"/>
+  <arg name="record" default="false"/>
   <arg name="gazebo" default="false"/>
   <arg name="rviz" default="true"/>
-  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
+  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-topleft.yaml" />
   <!--MCL package parameters-->
-  <arg name="launch-prefix" default=""/>
+  <arg name="mcl_prefix" default=""/>
   <arg name="mcl_pkg" default="amcl"/>
-  <arg name="init_x" default="-9" />
+  <arg name="global_localization" default="true"/>
+  <arg name="init_x" default="-11" />
   <arg name="init_y" default="8.4" />
   <arg name="init_a" default="0" />
-  <arg name="max_particles" default="2000"/>
+  <arg name="max_particles" default="3000"/>
+  <arg name="bagfile" default="/home/jolly/rosbag/ex1/2018-01-14-14-13-24-clean.bag"/>
+  <!--
+  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
+  <arg name="bagfile" default="/home/jolly/rosbag/ex2/2018-01-16-14-52-43-clean.bag"/>
+  -->
 
   <!--MAP SERVER-->
   <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_yaml)" />
 
   <!--AMCL and GAZEBO-->
   <include file="$(find mixmcl)/launch/$(arg mcl_pkg).launch">
-    <arg name="launch-prefix" value="$(arg launch-prefix)"/>
+    <arg name="launch-prefix" value="$(arg mcl_prefix)"/>
+    <!--
+    <arg name="init_x" value="-9"/>
+    <arg name="init_y" value="6.4"/>
+    <arg name="init_a" value="-0.707"/>
+    -->
+    <arg name="global_localization" value="$(arg global_localization)"/>
     <arg name="init_x" value="$(arg init_x )"/>
     <arg name="init_y" value="$(arg init_y )"/>
     <arg name="init_a" value="$(arg init_a )"/>
@@ -35,7 +48,13 @@
     <arg name="init_y" value="$(arg init_y )"/>
     <arg name="init_a" value="$(arg init_a )"/>
   </include>
-  <node name="rosbagplayer" pkg="rosbag" type="play" args="--clock $(arg bagfile)" if="$(arg playbag)"/>
+  <node name="rosbagrecorder" pkg="rosbag" type="record" if="$(arg record)" output="screen" args="-a -o $(arg mcl_pkg) /tf /p3dx/odom /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
+  <group if="$(arg playbag)">
+    <node if="$(arg suicide)"     name="rosbagplayer" pkg="mixmcl" type="playkill.sh" args="$(arg bagfile) $(arg mcl_pkg)" output="screen"/>
+    <node unless="$(arg suicide)" name="rosbagplayer" pkg="rosbag" type="play" args="--pause $(arg bagfile)" output="screen"/>
+  </group>
+  <!--
+-->
 
   <!--MOVE BASE for COSTMAP-->
   <include file="$(find p3dx_2dnav)/launch/move_base.launch" unless="$(arg playbag)">

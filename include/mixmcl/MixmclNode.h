@@ -7,7 +7,6 @@
 
 //Allows MCL to build density trees for particle evaluation
 #include <nuklei/KernelCollection.h>
-#include <nuklei/Kernel.h>
 class MixmclNode : public MCL<MixmclNode>
 {
   friend class MCL;
@@ -16,20 +15,19 @@ class MixmclNode : public MCL<MixmclNode>
     ~MixmclNode();
     static void buildDensityTree(pf_t* pf, boost::shared_ptr<nuklei::KernelCollection>& kdt, double loch, double orih);//build a KernelCollection based on previous weighted set for evaluating current dual set
     static inline void poseToSe3(const pf_vector_t& vec_p, nuklei::kernel::se3& se3_p);
+    static inline void se3ToPose(const nuklei::kernel::se3& se3_p, pf_vector_t& vec_p);
   protected:
     //inheritance
     void laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan);
     void GLCB()
     {
-      ROS_INFO("MixmclNode::GLCB() is called. Build density tree..");
-      //buildDensityTree();
-      buildDensityTree(pf_, kdt_, loch_, orih_);
+      //ROS_INFO("MixmclNode::GLCB() is called. Build density tree..");
+      //buildDensityTree(pf_, kdt_, loch_, orih_);
     };
     void AIP()
     {
-      ROS_INFO("MixmclNode::AIP() is called. Build density tree..");
-      //buildDensityTree();
-      buildDensityTree(pf_, kdt_, loch_, orih_);
+      //ROS_INFO("MixmclNode::AIP() is called. Build density tree..");
+      //buildDensityTree(pf_, kdt_, loch_, orih_);
     };
     virtual void RCCB();
 
@@ -44,15 +42,19 @@ class MixmclNode : public MCL<MixmclNode>
     ros::Publisher particlecloud2_pub_;
     dynamic_reconfigure::Server<mixmcl::MIXMCLConfig> *dsrv2_;
     mixmcl::MIXMCLConfig default_config2_;
-    //void buildDensityTree();//build a KernelCollection based on previous weighted set for evaluating current dual set
     void mixtureProposals();//determin the size of dual set and regular set
-    void combineSets();//combining dual set and regular set
-    void publishCloud(pf_sample_set_t* set);
-    void publishCloud2(pf_sample_set_t* set);//publish the particles drawn from a kdtree of KernelCollection wrt current laser feature
+    double dualmclNEvaluation( amcl::AMCLLaserData& ldata, amcl::AMCLOdomData& inverse_odata);
     void createKCGrid();//read data from binary file and create a discrete KernelCollection grid
     void reconfigureCB2(mixmcl::MIXMCLConfig &config, uint32_t level);
-    static inline void se3ToPose(const nuklei::kernel::se3& se3_p, pf_vector_t& vec_p);
-
+    void printInfo()
+    {
+      ROS_INFO("loch: %f", loch_);
+      ROS_INFO("orih: %f", orih_);
+      ROS_INFO("mixing_rate: %f", mixing_rate_);
+      ROS_INFO("ita: %f", ita_);
+      ROS_INFO("fxres, fyres, fdres: %d %d %d", fxres_, fyres_, fdres_);
+      ROS_INFO("param_filename: %s", sample_param_filename_.c_str());
+    };
 };
 
 inline void

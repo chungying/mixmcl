@@ -5,6 +5,12 @@ template class MCL<AmclNode>;
 AmclNode::AmclNode():
   MCL()
 {
+
+  std::string tmp_resample_type;
+  if(!private_nh_.getParam("resample_type", tmp_resample_type))
+    ROS_INFO("Resample type: augmented because AMCL dosn't take other resamplig types.");
+  resample_function_ = &pf_update_resample;
+
   boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
   ROS_DEBUG("AmclNode::AmclNode() is allocating laser_scan_filter_.");
   this->laser_scan_filter_ = 
@@ -172,69 +178,10 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   if(lasers_update_[laser_index])
   {
     amcl::AMCLLaserData ldata;
-    ldata.sensor = lasers_[laser_index];
-    ldata.range_count = laser_scan->ranges.size();
-
-    // To account for lasers that are mounted upside-down, we determine the
-    // min, max, and increment angles of the laser in the base frame.
-    //
-    // Construct min and max angles of laser, in the base_link frame.
-    tf::Quaternion q;
-    q.setRPY(0.0, 0.0, laser_scan->angle_min);
-    tf::Stamped<tf::Quaternion> min_q(q, laser_scan->header.stamp,
-                                      laser_scan->header.frame_id);
-    q.setRPY(0.0, 0.0, laser_scan->angle_min + laser_scan->angle_increment);
-    tf::Stamped<tf::Quaternion> inc_q(q, laser_scan->header.stamp,
-                                      laser_scan->header.frame_id);
-    try
-    {
-      tf_->transformQuaternion(base_frame_id_, min_q, min_q);
-      tf_->transformQuaternion(base_frame_id_, inc_q, inc_q);
-    }
-    catch(tf::TransformException& e)
-    {
-      ROS_WARN("Unable to transform min/max laser angles into base frame: %s",
-               e.what());
-      return;
-    }
-
-    double angle_min = tf::getYaw(min_q);
-    double angle_increment = tf::getYaw(inc_q) - angle_min;
-
-    // wrapping angle to [-pi .. pi]
-    angle_increment = fmod(angle_increment + 5*M_PI, 2*M_PI) - M_PI;
-
-    ROS_DEBUG("Laser %d angles in base frame: min: %.3f inc: %.3f", laser_index, angle_min, angle_increment);
-
-    // Apply range min/max thresholds, if the user supplied them
-    if(laser_max_range_ > 0.0)
-      ldata.range_max = std::min(laser_scan->range_max, (float)laser_max_range_);
-    else
-      ldata.range_max = laser_scan->range_max;
-    double range_min;
-    if(laser_min_range_ > 0.0)
-      range_min = std::max(laser_scan->range_min, (float)laser_min_range_);
-    else
-      range_min = laser_scan->range_min;
-    // The AMCLLaserData destructor will free this memory
-    ldata.ranges = new double[ldata.range_count][2];
-    ROS_ASSERT(ldata.ranges);
-    for(int i=0;i<ldata.range_count;i++)
-    {
-      // amcl doesn't (yet) have a concept of min range.  So we'll map short
-      // readings to max range.
-      if(laser_scan->ranges[i] <= range_min)
-        ldata.ranges[i][0] = ldata.range_max;
-      else
-        ldata.ranges[i][0] = laser_scan->ranges[i];
-      // Compute bearing
-      ldata.ranges[i][1] = angle_min +
-              (i * angle_increment);
-    }
+    MCL::createLaserData(laser_index, ldata, laser_scan);
 
     double total = lasers_[laser_index]->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
-    pf_sample_set_t* set = pf_->sets + pf_->current_set;
-    double w_avg = pf_normalize(set, total);
+    double w_avg = pf_normalize(pf_, total);
     pf_update_augmented_weight(pf_, w_avg);
 
     lasers_update_[laser_index] = false;
@@ -244,11 +191,11 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     // Resample the particles
     if(!(++resample_count_ % resample_interval_))
     {
-      pf_update_resample(pf_);
+      resample_function_(pf_);
       resampled = true;
     }
 
-    set = pf_->sets + pf_->current_set;
+    pf_sample_set_t* set = pf_->sets + pf_->current_set;
     ROS_DEBUG("Num samples: %d\n", set->sample_count);
 
     // Publish the resulting cloud
