@@ -8,6 +8,7 @@
   <arg name="init_a" default="0" />
   <arg name="max_particles" />
   <arg name="launch-prefix" default="" />
+  <arg name="global_localization" />
 
   <node pkg="mixmcl" type="dual" name="dual" output="screen" launch-prefix="$(arg launch-prefix)">
     <remap from="scan" to="$(arg scan_topic)" />

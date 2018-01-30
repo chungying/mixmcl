@@ -28,6 +28,7 @@
 #include "geometry_msgs/Pose.h"
 #include "nav_msgs/GetMap.h"
 #include "nav_msgs/SetMap.h"
+#include "nav_msgs/Odometry.h"
 #include "std_srvs/Empty.h"
 
 // For transform support

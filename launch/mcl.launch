@@ -15,7 +15,7 @@
   <arg name="suicide"/>
   <!--
   -->
-  <node pkg="mixmcl" type="amcl" name="amcl" output="screen" args="--run-from-bag $(arg bagfile)">
+  <node pkg="mixmcl" type="amcl" name="mcl" output="screen" args="--run-from-bag $(arg bagfile)">
     <remap from="scan" to="$(arg scan_topic)" />
     <rosparam command="load" file="$(find mixmcl)/yaml/amcl.yaml"/>
     <param unless="$(arg global_localization)" name="initial_pose_x" value="$(arg init_x)"/>
@@ -24,13 +24,14 @@
     <param name="global_localization" value="$(arg global_localization)"/>
     <param name="resample_interval" value="$(arg resample_interval)"/>
     <param name="max_particles" value="$(arg max_particles)" />
+    <param name="resample_type" value="lowvariance"/>
     <!--
     -->
   </node>
 
-  <node if="$(arg record)" name="rosbagrecorder" pkg="rosbag" type="record" output="screen" args="-o amcl_mp$(arg max_particles)_ri$(arg resample_interval) /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
+  <node if="$(arg record)" name="rosbagrecorder" pkg="rosbag" type="record" output="screen" args="-o mcl_mp$(arg max_particles)_ri$(arg resample_interval) /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
   <!--MAP SERVER-->
   <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_yaml)" />
-  <node if="$(arg suicide)" name="kill" pkg="mixmcl" type="kill.sh" args="/amcl" output="screen"/>
+  <node if="$(arg suicide)" name="kill" pkg="mixmcl" type="kill.sh" args="/mcl" output="screen"/>
 
 </launch>

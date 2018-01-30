@@ -17,9 +17,11 @@
   <arg name="init_y" default="8.4" />
   <arg name="init_a" default="0" />
   <arg name="max_particles" default="3000"/>
-  <arg name="bagfile" default="/home/jolly/rosbag/ex1/2018-01-14-14-13-24-clean.bag"/>
+  <arg name="resample_interval" default="2"/>
+  <arg name="bagfile" default="/home/jolly/rosbag/ex3/2018-01-23-22-37-47-clean.bag"/>
   <!--
   <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
+  <arg name="bagfile" default="/home/jolly/rosbag/ex1/2018-01-14-14-13-24-clean.bag"/>
   <arg name="bagfile" default="/home/jolly/rosbag/ex2/2018-01-16-14-52-43-clean.bag"/>
   -->
 
@@ -33,12 +35,14 @@
     <arg name="init_x" value="-9"/>
     <arg name="init_y" value="6.4"/>
     <arg name="init_a" value="-0.707"/>
+    <arg if="$(arg playbag)" name="bagfile" value="$(arg bagfile)"/>
     -->
     <arg name="global_localization" value="$(arg global_localization)"/>
     <arg name="init_x" value="$(arg init_x )"/>
     <arg name="init_y" value="$(arg init_y )"/>
     <arg name="init_a" value="$(arg init_a )"/>
     <arg name="max_particles" value="$(arg max_particles)"/>
+    <arg name="resample_interval" value="$(arg resample_interval)"/>
   </include>
 
   <!--P3DX in GAZEBO-->
@@ -48,12 +52,14 @@
     <arg name="init_y" value="$(arg init_y )"/>
     <arg name="init_a" value="$(arg init_a )"/>
   </include>
-  <node name="rosbagrecorder" pkg="rosbag" type="record" if="$(arg record)" output="screen" args="-a -o $(arg mcl_pkg) /tf /p3dx/odom /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
+
+  <node name="rosbagrecorder" pkg="rosbag" type="record" if="$(arg record)" output="screen" args="-o $(arg mcl_pkg) /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
+
+<!--
   <group if="$(arg playbag)">
     <node if="$(arg suicide)"     name="rosbagplayer" pkg="mixmcl" type="playkill.sh" args="$(arg bagfile) $(arg mcl_pkg)" output="screen"/>
-    <node unless="$(arg suicide)" name="rosbagplayer" pkg="rosbag" type="play" args="--pause $(arg bagfile)" output="screen"/>
+    <node unless="$(arg suicide)" name="rosbagplayer" pkg="rosbag" type="play" args="&#x002d;&#x002d;pause $(arg bagfile)" output="screen"/>
   </group>
-  <!--
 -->
 
   <!--MOVE BASE for COSTMAP-->

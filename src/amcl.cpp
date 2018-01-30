@@ -32,13 +32,22 @@ main(int argc, char** argv)
   if (argc == 1)
   {
     // run using ROS input
+    ROS_INFO("ros::spin() in main");
     ros::spin();
   }
-  else if ((argc == 3) && (std::string(argv[1]) == "--run-from-bag"))
+  else if ((argc >= 3) && (std::string(argv[1]) == "--run-from-bag"))
   {
+    ROS_INFO("runFromBag in main");
     mixmcl_node_ptr->runFromBag(argv[2]);
   }
-
+  else
+  {
+    ROS_INFO("something wrong in main");
+    for( int i = 0; i < argc ; i++)
+    {
+      ROS_INFO("%d %s", i, argv[i]);
+    }
+  }
   // Without this, our boost locks are not shut down nicely
   mixmcl_node_ptr.reset();
 

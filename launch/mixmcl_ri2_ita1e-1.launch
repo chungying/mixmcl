@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="scan_topic" default="/p3dx/laser/scan"/>
+  <arg name="global_localization" default="false"/>
+  <arg name="init_x" default="-9" />
+  <arg name="init_y" default="8.4" />
+  <arg name="init_a" default="0" />
+  <arg name="max_particles" default="2000" />
+  <arg name="launch-prefix" default="" />
+
+  <env name="ROSCONSOLE_CONFIG_FILE" 
+     value="$(find mixmcl)/config/custom_rosconsole.conf"/>
+  <node pkg="mixmcl" type="mixmcl" name="mixmcl" output="screen" launch-prefix="$(arg launch-prefix)">
+    <remap from="scan" to="$(arg scan_topic)" />
+    <rosparam command="load" file="$(find mixmcl)/yaml/amcl.yaml"/>
+    <param name="global_localization" value="$(arg global_localization)"/>
+    <param name="initial_pose_x" value="$(arg init_x)"/>
+    <param name="initial_pose_y" value="$(arg init_y)"/>
+    <param name="initial_pose_a" value="$(arg init_a)"/>
+    <param name="max_particles" value="$(arg max_particles)" />
+    <param name="resample_interval" value="2"/>
+    <param name="laser_model_type" value="beam"/>
+    <param name="feature_resolution_x" value="1"/>
+    <param name="feature_resolution_y" value="1"/>
+    <param name="feature_resolution_d" value="1000"/>
+    <param name="mixing_rate" value="0.1"/>
+    <param name="dual_normalizer_ita" value="0.1"/>
+    <param name="dual_loc_bandwidth" value="2"/>
+    <param name="dual_ori_bandwidth" value="2"/>
+    <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-09-182745-param.txt"/>
+    <!--
+    <param name="dual_loc_bandwidth" value="1"/>
+    <param name="dual_ori_bandwidth" value="0.1"/>
+    <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-12-234006-param.txt"/>
+    <param name="" value=""/>
+    -->
+  </node>
+</launch>

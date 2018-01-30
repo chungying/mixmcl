@@ -129,7 +129,7 @@ MCL<D>::MCL() :
                       this);
 
   //generic subscribers
-  laser_scan_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(nh_, scan_topic_, 1);
+  laser_scan_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(nh_, scan_topic_, 100);
   initial_pose_sub_ = nh_.subscribe("initialpose", 2, &MCL::initialPoseReceived, this);
 
   if(use_map_topic_) {
@@ -624,13 +624,17 @@ MCL<D>::runFromBag(const std::string &in_bag_fn)
   rosbag::Bag bag;
   bag.open(in_bag_fn, rosbag::bagmode::Read);
   std::vector<std::string> topics;
-  topics.push_back(std::string("tf"));
-  std::string scan_topic_name = "base_scan"; 
+  topics.push_back(std::string("/tf"));
+  //std::string scan_topic_name = "base_scan"; 
+  std::string scan_topic_name = "/p3dx/laser/scan"; 
   topics.push_back(scan_topic_name);
+  std::string ground_truth_topic_name = "/p3dx/base_pose_ground_truth"; 
+  topics.push_back(ground_truth_topic_name);
   rosbag::View view(bag, rosbag::TopicQuery(topics));
 
   ros::Publisher laser_pub = nh_.advertise<sensor_msgs::LaserScan>(scan_topic_name, 100);
   ros::Publisher tf_pub = nh_.advertise<tf2_msgs::TFMessage>("/tf", 100);
+  ros::Publisher gt_pub = nh_.advertise<nav_msgs::Odometry>(ground_truth_topic_name, 100);
 
   // Sleep for a second to let all subscribers connect
   ros::WallDuration(1.0).sleep();
@@ -651,8 +655,12 @@ MCL<D>::runFromBag(const std::string &in_bag_fn)
     ROS_INFO("Waiting for map...");
     ros::getGlobalCallbackQueue()->callAvailable(ros::WallDuration(1.0));
   }
-
-  BOOST_FOREACH(rosbag::MessageInstance const msg, view)
+  int tfCount = 0;
+  int scanCount = 0;
+  int gtCount = 0;
+  boost::shared_ptr<rosbag::MessageInstance> latest_gt_msg;
+  bool pub_gt_flag = false;
+  BOOST_FOREACH(rosbag::MessageInstance msg, view)
   {
     if (!ros::ok())
     {
@@ -665,6 +673,7 @@ MCL<D>::runFromBag(const std::string &in_bag_fn)
     tf2_msgs::TFMessage::ConstPtr tf_msg = msg.instantiate<tf2_msgs::TFMessage>();
     if (tf_msg != NULL)
     {
+      tfCount++;
       tf_pub.publish(msg);
       for (size_t ii=0; ii<tf_msg->transforms.size(); ++ii)
       {
@@ -676,6 +685,11 @@ MCL<D>::runFromBag(const std::string &in_bag_fn)
     sensor_msgs::LaserScan::ConstPtr base_scan = msg.instantiate<sensor_msgs::LaserScan>();
     if (base_scan != NULL)
     {
+      //if there is a latest gt_msg, publish gt_msg
+      if(latest_gt_msg) gt_pub.publish(*latest_gt_msg);
+      //else set up a pub_gt_flag publish next gt_msg
+      else pub_gt_flag = true;
+      scanCount++;
       laser_pub.publish(msg);
       laser_scan_filter_->add(base_scan);
       if (bag_scan_period_ > ros::WallDuration(0))
@@ -685,13 +699,29 @@ MCL<D>::runFromBag(const std::string &in_bag_fn)
       continue;
     }
 
+    nav_msgs::Odometry::ConstPtr ground_truth = msg.instantiate<nav_msgs::Odometry>();
+    if (ground_truth != NULL)
+    {
+      gtCount++;
+      //if pub_gt_flag is true, publish this msg
+      if(pub_gt_flag)
+      {
+        gt_pub.publish(msg);
+        pub_gt_flag = false;
+      }
+      else
+        //record latest_gt_msg
+        latest_gt_msg = boost::make_shared<rosbag::MessageInstance>(msg);
+      continue;
+    }
+
     ROS_WARN_STREAM("Unsupported message type" << msg.getTopic());
   }
 
   bag.close();
 
   double runtime = (ros::WallTime::now() - start).toSec();
-  ROS_INFO("Bag complete, took %.1f seconds to process, shutting down", runtime);
+  ROS_INFO("Bag complete, took %.1f seconds to process for %d tf msgs and %d scan msgs, shutting down", runtime, tfCount, scanCount);
 
   const geometry_msgs::Quaternion & q(this->last_published_pose.pose.pose.orientation);
   double yaw, pitch, roll;

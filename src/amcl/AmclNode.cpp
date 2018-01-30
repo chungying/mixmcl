@@ -6,10 +6,24 @@ AmclNode::AmclNode():
   MCL()
 {
 
+  //std::string tmp_resample_type;
+  //if(!private_nh_.getParam("resample_type", tmp_resample_type))
+  //  ROS_INFO("Resample type: augmented because AMCL dosn't take other resamplig types.");
   std::string tmp_resample_type;
-  if(!private_nh_.getParam("resample_type", tmp_resample_type))
-    ROS_INFO("Resample type: augmented because AMCL dosn't take other resamplig types.");
-  resample_function_ = &pf_update_resample;
+  private_nh_.param("resample_type", tmp_resample_type, std::string("augmented"));
+  ROS_INFO("Resample type is %s", tmp_resample_type.c_str());
+  if(tmp_resample_type == "augmented")
+    resample_function_ = &pf_update_resample;
+  else if(tmp_resample_type == "kld")
+    resample_function_ = &pf_update_resample_kld;
+  else if(tmp_resample_type == "lowvariance")
+    resample_function_ = &pf_update_resample_lowvariance;
+  else
+  {
+    resample_function_ = &pf_update_resample;
+    ROS_INFO("There is no resample type named %s. Using default type: augmented", tmp_resample_type.c_str());
+  }
+  
 
   boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
   ROS_DEBUG("AmclNode::AmclNode() is allocating laser_scan_filter_.");
