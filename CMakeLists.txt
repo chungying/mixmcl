@@ -14,6 +14,8 @@ find_package(catkin REQUIRED
     tf2_ros
     dynamic_reconfigure
     nav_msgs
+    std_msgs
+    stamped_std_msgs
     gazebo_msgs
     amcl
     random_numbers
@@ -45,7 +47,7 @@ catkin_package(
     nav_msgs
     std_srvs
   INCLUDE_DIRS include
-  LIBRARIES mcl dualmcl_tool mixmcl_node amcl_node mcmcl_node
+  LIBRARIES mcl dualmcl_tool mixmcl_node amcl_node mcmcl_node markov_node
 )
 
 ##include dirrectories##
@@ -87,6 +89,16 @@ add_library(amcl_node
   src/amcl/AmclNode.cpp
 )
 target_link_libraries(amcl_node
+  ${amcl_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
+  mcl
+)
+
+add_library(markov_node
+  src/markov/MarkovNode.cpp
+)
+target_link_libraries(markov_node
   ${amcl_LIBRARIES}
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
@@ -138,6 +150,16 @@ add_executable(roscheck
 )
 target_link_libraries(roscheck
   ${catkin_LIBRARIES}
+)
+
+add_executable(markov
+  src/markov.cpp
+)
+target_link_libraries(markov
+  ${amcl_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
+  mcl markov_node
 )
 
 add_executable(amcl
@@ -193,8 +215,15 @@ target_link_libraries(dual
   mcl mixmcl_node dualmcl_tool
 )
 
+add_executable(multi_array_test
+  src/multi_array_test.cpp
+)
+target_link_libraries(multi_array_test
+  ${catkin_LIBRARIES}
+)
+
 install( TARGETS
-    mixmcl amcl mcmcl buildKDT iotest roscheck dual
+    mixmcl amcl mcmcl buildKDT iotest roscheck dual markov
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

@@ -1,10 +1,5 @@
 #include "mcl/MCL.h"
 
-//template<class D>
-//std::vector<std::pair<int,int> > MCL<D>::free_space_indices;
-//template<class D>
-//random_numbers::RandomNumberGenerator MCL<D>::rng_;
-
 template<class D>
 MCL<D>::MCL() :
     sent_first_transform_(false),
@@ -17,7 +12,6 @@ MCL<D>::MCL() :
     private_nh_("~"),
     initial_pose_hyp_(NULL),
     first_map_received_(false),
-//    laser_scan_filter_(NULL),
     first_reconfigure_call_(true)
 {
   boost::recursive_mutex::scoped_lock l(configuration_mutex_);
@@ -304,16 +298,6 @@ MCL<D>::reconfigureCB(amcl::AMCLConfig &config, uint32_t level)
 
   //move build_density_tree to Derived::reconfigureCB()
   static_cast<D*>(this)->RCCB();
-
-  //delete laser_scan_filter_;
-  //laser_scan_filter_ = 
-  //        new tf::MessageFilter<sensor_msgs::LaserScan>(*laser_scan_sub_, 
-  //                                                      *tf_, 
-  //                                                      odom_frame_id_, 
-  //                                                      100);
-  //laser_scan_filter_->registerCallback(boost::bind(&D::laserReceived,
-  //                                                 this, _1));
-
 }
 
 // force nomotion updates (amcl updating without requiring motion)
@@ -846,7 +830,6 @@ MCL<D>::~MCL()
 {
   delete dsrv_;
   freeMapDependentMemory();
-  //delete laser_scan_filter_;
   delete laser_scan_sub_;
   delete tfb_;
   delete tf_;

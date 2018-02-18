@@ -263,10 +263,10 @@ McmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   if(lasers_update_[laser_index])
   {
     geometry_msgs::PoseArray accepted_cloud;
-    accepted_cloud.header.stamp = ros::Time::now();
+    accepted_cloud.header.stamp = laser_scan->header.stamp;
     accepted_cloud.header.frame_id = global_frame_id_;
     geometry_msgs::PoseArray rejected_cloud;
-    rejected_cloud.header.stamp = ros::Time::now();
+    rejected_cloud.header.stamp = laser_scan->header.stamp;
     rejected_cloud.header.frame_id = global_frame_id_;
     //double total = metropolisNEvaluation(accepted_cloud, rejected_cloud, ldata);
     double total = metropolisNEvaluation(accepted_cloud, rejected_cloud, ldata, ita_);
@@ -290,14 +290,17 @@ McmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     particlecloud3_pub_.publish(rejected_cloud);
     lasers_update_[laser_index] = false;
     pf_odom_pose_ = pose;
+    //Publish the resulting cloud
+    if (!m_force_update) 
+      MCL::publishParticleCloud(particlecloud_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
   }//endif(lasers_update_[laser_index])
   else if(static_update_)
   {
     geometry_msgs::PoseArray accepted_cloud;
-    accepted_cloud.header.stamp = ros::Time::now();
+    accepted_cloud.header.stamp = laser_scan->header.stamp;
     accepted_cloud.header.frame_id = global_frame_id_;
     geometry_msgs::PoseArray rejected_cloud;
-    rejected_cloud.header.stamp = ros::Time::now();
+    rejected_cloud.header.stamp = laser_scan->header.stamp;
     rejected_cloud.header.frame_id = global_frame_id_;
     double total = metropolisNEvaluation(accepted_cloud, rejected_cloud, ldata, ita_);
     if(version1_) 
@@ -306,6 +309,9 @@ McmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       double w_avg = pf_normalize(pf_, total);
       resample_function_(pf_);
     }
+    //Publish the resulting cloud
+    if (!m_force_update) 
+      MCL::publishParticleCloud(particlecloud_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
     //TODO update cloud information without resampling
     particlecloud2_pub_.publish(accepted_cloud);
     particlecloud3_pub_.publish(rejected_cloud);
@@ -321,9 +327,6 @@ McmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     //  resampled = true;
     //}
   }
-  //Publish the resulting cloud
-  if (!m_force_update) 
-    MCL::publishParticleCloud(particlecloud_pub_, global_frame_id_, pf_);
   
   if(resampled || force_publication)
   {

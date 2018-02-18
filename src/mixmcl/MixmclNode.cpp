@@ -380,6 +380,25 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     amcl::AMCLLaserData ldata;
     MCL::createLaserData(laser_index, ldata, laser_scan);
     double total =  dualmclNEvaluation(ldata, inverse_odata);
+    //publish the particle cloud
+    //note that this cloud has been applied the inverse odata.
+    pf_->current_set = set_b_idx;
+    MCL::publishParticleCloud(particlecloud2_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
+    //Finally, combine the set together into set_a
+    pf_sample_set_t* set_a = pf_->sets + set_a_idx;
+    pf_sample_set_t* set_b = pf_->sets + set_b_idx;
+    pf_sample_t* sample_a;
+    pf_sample_t* sample_b;
+    assert((set_a->sample_count + set_b->sample_count)<=max_particles_);
+    for(int i = 0; i < set_b->sample_count ; ++i)
+    {
+      sample_a = set_a->samples + set_a->sample_count + i;
+      sample_b = set_b->samples + i;
+      sample_a->pose = sample_b->pose;
+      sample_a->weight = sample_b->weight;
+    }
+    set_a->sample_count += set_b->sample_count;
+    pf_->current_set = set_a_idx;
     double w_avg = pf_normalize(pf_, total);
 
     lasers_update_[laser_index] = false;
@@ -398,7 +417,7 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     ROS_DEBUG("Num samples: %d\n", pf_->sets[pf_->current_set].sample_count);
     // Publish the resulting cloud
     if (!m_force_update) 
-      MCL::publishParticleCloud(particlecloud_pub_, global_frame_id_, pf_);
+      MCL::publishParticleCloud(particlecloud_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
   }//endif(lasers_update_[laser_index])
 
   if(resampled || force_publication)
@@ -579,22 +598,21 @@ double MixmclNode::dualmclNEvaluation(amcl::AMCLLaserData& ldata, amcl::AMCLOdom
     dual_set_total += sample_b->weight;
   }
 
-  //publish the particle cloud
-  //note that this cloud has been applied the inverse odata.
-  pf_->current_set = set_b_idx;
-  MCL::publishParticleCloud(particlecloud2_pub_, global_frame_id_, pf_);
-  //Finally, combine the set together into set_a
-  assert((set_a->sample_count + set_b->sample_count)<=max_particles_);
-  for(int i = 0; i < set_b->sample_count ; ++i)
-  {
-    sample_a = set_a->samples + set_a->sample_count + i;
-    sample_b = set_b->samples + i;
-    sample_a->pose = sample_b->pose;
-    sample_a->weight = sample_b->weight;
-  }
-  set_a->sample_count += set_b->sample_count;
-  //set_b->sample_count = 0;
-  pf_->current_set = set_a_idx;
+  ////publish the particle cloud
+  ////note that this cloud has been applied the inverse odata.
+  //pf_->current_set = set_b_idx;
+  //MCL::publishParticleCloud(particlecloud2_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
+  ////Finally, combine the set together into set_a
+  //assert((set_a->sample_count + set_b->sample_count)<=max_particles_);
+  //for(int i = 0; i < set_b->sample_count ; ++i)
+  //{
+  //  sample_a = set_a->samples + set_a->sample_count + i;
+  //  sample_b = set_b->samples + i;
+  //  sample_a->pose = sample_b->pose;
+  //  sample_a->weight = sample_b->weight;
+  //}
+  //set_a->sample_count += set_b->sample_count;
+  //pf_->current_set = set_a_idx;
   return dual_set_total + regular_set_total;
 }
 

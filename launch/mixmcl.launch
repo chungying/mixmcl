@@ -8,12 +8,14 @@
   <arg name="init_a" default="3.14159265" />
   <arg name="max_particles" default="2000" />
   <arg name="resample_interval" default="1" />
+  <arg name="dual_normalizer_ita" default="1e-1" />
   <arg name="launch-prefix" default="" />
   <arg name="record" default="true" />
   <arg name="bagfile" default="/home/jolly/rosbag/ex3/2018-01-23-22-37-47-clean.bag"/>
   <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-topleft.yaml" />
   <arg name="suicide"/>
   <!--
+  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
   -->
   <node pkg="mixmcl" type="mixmcl" name="mixmcl" output="screen" args="--run-from-bag $(arg bagfile)">
     <remap from="scan" to="$(arg scan_topic)" />
@@ -35,13 +37,13 @@
     <param name="feature_resolution_y" value="10"/>
     <param name="feature_resolution_d" value="600"/>
     <param name="mixing_rate" value="0.1"/>
-    <param name="dual_normalizer_ita" value="0.1"/>
+    <param name="dual_normalizer_ita" value="$(arg dual_normalizer_ita)"/>
     <param name="dual_loc_bandwidth" value="2"/>
     <param name="dual_ori_bandwidth" value="2"/>
     <param name="sample_param_filename" value="$(find mixmcl)/data/2018-01-09-182745-param.txt"/>
   </node>
 
-  <node if="$(arg record)" name="rosbagrecorder" pkg="rosbag" type="record" output="screen" args="-o mixmcl_mp$(arg max_particles)_ri$(arg resample_interval)_ita1e-1 /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
+  <node if="$(arg record)" name="rosbagrecorder" pkg="rosbag" type="record" output="screen" args="-o mixmcl_mp$(arg max_particles)_ri$(arg resample_interval)_ita$(arg dual_normalizer_ita) /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
   <!--MAP SERVER-->
   <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_yaml)" />
   <node if="$(arg suicide)" name="kill" pkg="mixmcl" type="kill.sh" args="/mixmcl" output="screen"/>

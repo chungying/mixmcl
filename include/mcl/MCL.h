@@ -130,7 +130,8 @@ class MCL
 
     static void publishParticleCloud(
       ros::Publisher& particlecloud_pub_,
-      std::string& global_frame_id_,
+      const std::string& global_frame_id_,
+      const ros::Time& stamp,
       pf_t* pf_,
       int set_drift);
 
@@ -309,14 +310,16 @@ MCL<D>::getYaw(tf::Pose& t)
 template<class D>
 void MCL<D>::publishParticleCloud(
   ros::Publisher& particlecloud_pub_,
-  std::string& global_frame_id_,
+  const std::string& global_frame_id_,
+  const ros::Time& stamp,
   pf_t* pf_,
   int set_shift = 0)
 {
   // Publish the resulting cloud
-  pf_sample_set_t* set = pf_->sets + ((pf_->current_set + set_shift) % 2); 
+  pf_sample_set_t* set = pf_->sets + ((pf_->current_set + set_shift) % 2);
+  ROS_INFO("printing %d particles",set->sample_count);
   geometry_msgs::PoseArray cloud_msg;
-  cloud_msg.header.stamp = ros::Time::now();
+  cloud_msg.header.stamp = stamp;
   cloud_msg.header.frame_id = global_frame_id_;
   cloud_msg.poses.resize(set->sample_count);
   for(int i=0;i<set->sample_count;i++)
@@ -329,7 +332,7 @@ void MCL<D>::publishParticleCloud(
           set->samples[i].pose.v[0],
           set->samples[i].pose.v[1], 
           0)),
-        cloud_msg.poses[i]);
+      cloud_msg.poses[i]);
   }
   particlecloud_pub_.publish(cloud_msg);
 }

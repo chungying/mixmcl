@@ -14,6 +14,7 @@
   <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-topleft.yaml" />
   <arg name="suicide"/>
   <!--
+  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
   -->
   <node pkg="mixmcl" type="amcl" name="mcl" output="screen" args="--run-from-bag $(arg bagfile)">
     <remap from="scan" to="$(arg scan_topic)" />
