@@ -2,7 +2,6 @@
 #define SAMPLING_H
 
 #include <fstream>
-#include "gazebo_msgs/SetModelState.h"
 #include "mixmcl/MixmclNode.h"
 #include "mixmcl/laser_feature.h"
 #include "io/dataio.h"

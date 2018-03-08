@@ -16,8 +16,6 @@ find_package(catkin REQUIRED
     nav_msgs
     std_msgs
     stamped_std_msgs
-    gazebo_msgs
-    #amcl
     amcl_modified
     random_numbers
 )
