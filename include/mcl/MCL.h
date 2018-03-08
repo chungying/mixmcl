@@ -8,11 +8,11 @@
 #include <boost/bind.hpp>
 #include <boost/thread/mutex.hpp>
 
-#include "amcl/map/map.h"
-#include "amcl/pf/pf.h"
+#include "amcl_modified/map/map.h"
+#include "amcl_modified/pf/pf.h"
+#include "amcl_modified/sensors/amcl_odom.h"
+#include "amcl_modified/sensors/amcl_laser.h"
 #include "amcl/pf/pf_resample.h"
-#include "amcl/sensors/amcl_odom.h"
-#include "amcl/sensors/amcl_laser.h"
 
 #include "random_numbers/random_numbers.h"
 
@@ -41,7 +41,7 @@
 
 // Dynamic_reconfigure
 #include "dynamic_reconfigure/server.h"
-#include "amcl/AMCLConfig.h"
+#include "amcl_modified/AMCLConfig.h"
 
 // Allows AMCL to run from bag file
 #include <rosbag/bag.h>

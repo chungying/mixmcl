@@ -1,8 +1,4 @@
-#include "amcl/pf/pf.h"
-#include "amcl/pf/pf_pdf.h"
-#include "amcl/pf/pf_kdtree.h"
 #include "amcl/pf/pf_resample.h"
-#include "mcl/MCL.h"//for random number generator MCL::rng_
 
 extern void pf_kdtree_clear(pf_kdtree_t *self);
 extern void pf_kdtree_insert(pf_kdtree_t *self, pf_vector_t pose, double value);
