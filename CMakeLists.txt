@@ -56,6 +56,7 @@ include_directories(
   ${flann_INCLUDE_DIRS}
 )
 
+message(STATUS "amcl_modified_INCLUDE_DIRS is ${amcl_modified_INCLUDE_DIRS}")
 ##Build libraries##
 add_library(mcl
   src/mcl/MCL.cpp

@@ -6,8 +6,8 @@
 #include "mixmcl/KCGrid.h"
 #include "tf/tf.h"
 #include "nuklei/Kernel.h"
-#include "amcl_modified/pf/pf.h"
-#include "amcl_modified/pf/pf_vector.h"
+#include "amcl/pf/pf.h"
+#include "amcl/pf/pf_vector.h"
 using namespace std;
 
 //basic fstream write and read.

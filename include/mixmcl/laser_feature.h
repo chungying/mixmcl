@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <vector>
 #include "ros/ros.h"
-#include "amcl_modified/sensors/amcl_laser.h"
+#include "amcl/sensors/amcl_laser.h"
 typedef struct laser_feature laser_feature_t;
 
 static laser_feature_t polygonCentroid(const amcl::AMCLLaserData& ldata);

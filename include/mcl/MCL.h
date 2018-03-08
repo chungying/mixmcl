@@ -8,10 +8,10 @@
 #include <boost/bind.hpp>
 #include <boost/thread/mutex.hpp>
 
-#include "amcl_modified/map/map.h"
-#include "amcl_modified/pf/pf.h"
-#include "amcl_modified/sensors/amcl_odom.h"
-#include "amcl_modified/sensors/amcl_laser.h"
+#include "amcl/map/map.h"
+#include "amcl/pf/pf.h"
+#include "amcl/sensors/amcl_odom.h"
+#include "amcl/sensors/amcl_laser.h"
 #include "amcl/pf/pf_resample.h"
 
 #include "random_numbers/random_numbers.h"

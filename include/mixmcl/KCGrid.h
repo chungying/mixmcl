@@ -5,7 +5,7 @@
 #include "nuklei/KernelCollection.h"
 #include "io/dataio.h"
 #include "io/paramio.h"
-#include "amcl_modified/pf/pf_vector.h"
+#include "amcl/pf/pf_vector.h"
 #include "mixmcl/laser_feature.h"
 #include "boost/smart_ptr.hpp"
 #include "boost/ptr_container/ptr_map.hpp"

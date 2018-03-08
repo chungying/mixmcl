@@ -7,7 +7,7 @@
 #include <boost/scoped_ptr.hpp>
 
 //DataType
-#include "amcl_modified/pf/pf_vector.h"//for pf_vector_t
+#include "amcl/pf/pf_vector.h"//for pf_vector_t
 #include "mixmcl/laser_feature.h"//for laser_feature_t
 
 using namespace std;
