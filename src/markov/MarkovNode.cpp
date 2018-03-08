@@ -47,10 +47,6 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   for(double p = 0.0; p <= radius ; p+=map_->scale)
     side.push_back(p);
   matsize = side.size();
-  //X = new Matrix();//TODO
-  //Y = new Matrix();
-  //X->reserve(matsize*matsize);//TODO
-  //Y->reserve(matsize*matsize);
   X.reset(new Matrix());
   Y.reset(new Matrix());
   X->reserve(matsize*matsize);
@@ -59,13 +55,10 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   {
     for(int j = 0 ; j < matsize ; ++j)
     {
-      //X->push_back(side[i]);//TODO
-      //Y->push_back(side[j]);
       X->push_back(side[i]);
       Y->push_back(side[j]);
     }
   }
-  //TODO
   auto worker = [&ang_arr,X,Y,&delta_rot1,&delta_trans,&delta_rot2]
   (aIter beg_oa, aIter end_oa, mIter beg_m, mIter end_m, amcl::AMCLOdom* odom)
   {
@@ -136,7 +129,8 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   vector<int>::iterator beg
   vector<int>::iterator end
   */
-  auto worker2 = [&worker2_mutex, set_a, set_b, X, Y, &mat_prob_matrices, &ang_arr]
+  int percent_count;
+  auto worker2 = [&worker2_mutex, set_a, set_b, X, Y, &mat_prob_matrices, &ang_arr, &percent_count]
   (double& total_weight, int& sample_counter, int const total_sample, vector<int>::iterator sample_beg, vector<int>::iterator sample_end, int const size_a_, map_t const * map_, vector<vector<int> >& free_space_positions_, int const ares_)
   {
     for(auto iter = sample_beg; iter != sample_end; ++iter)
@@ -176,7 +170,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
       std::lock_guard<std::mutex> lg(worker2_mutex);
       total_weight += sample_origin_weight;
       ++sample_counter;
-      if(sample_counter%1000 == 0)
+      if(sample_counter%percent_count == 0)
         ROS_DEBUG("progress: %f %d/%d",1.0*sample_counter/total_sample, sample_counter, total_sample);
     }
   };
@@ -187,6 +181,8 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   vector<int>::iterator sit = std::begin(active_sample_indices_);
   grainsize = (int)((double)active_sample_indices_.size()/(double)nb_threads);
   int total_sample = active_sample_indices_.size();
+  percent_count = total_sample * 0.01;
+  ROS_INFO("percent_count of total_sample: %d of %d", percent_count, total_sample);
   for(auto tit = std::begin(threads2); tit != std::end(threads2)-1 ; ++tit)
   {
     *tit = std::thread(worker2, std::ref(total_weight), std::ref(sample_counter), total_sample, sit, sit+grainsize, size_a_, map_, std::ref(free_space_positions_), ares_);
@@ -201,93 +197,6 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   //delete X;
   //delete Y;
   return total_weight;
-}
-
-//TODO deprecated
-//the version using spuared translation and rotation
-double MarkovNode::UpdateOdom(amcl::AMCLOdomData* ndata)
-{
-  double total = 0.0;
-  /*
-  grid_
-  odom_
-  */
-  //AMCLOdomData* ndata;
-  //ndata = (AMCLOdomData*) data;
-  pf_sample_set_t* set_a;
-  pf_sample_set_t* set_b;
-  pf_sample_t* sample_a;
-  pf_sample_t* sample_b;
-  pf_vector_t pose, delta;
-  pf_vector_t old_pose = pf_vector_sub(ndata->pose, ndata->delta);
-  set_a = grid_->sets + grid_->current_set;
-  set_b = grid_->sets + (grid_->current_set + 1)%2;
-  //calculate delta of ndata
-  double delta_rot1, delta_trans, delta_rot2;
-  double delta_rot1_hat, delta_trans_hat, delta_rot2_hat;
-  if(sqrt(ndata->delta.v[1]*ndata->delta.v[1] + 
-          ndata->delta.v[0]*ndata->delta.v[0]) < 0.01)
-    delta_rot1 = 0.0;
-  else
-    delta_rot1 = angle_diff(atan2(ndata->delta.v[1], ndata->delta.v[0]),
-                            old_pose.v[2]);
-  delta_trans = sqrt(ndata->delta.v[0]*ndata->delta.v[0] +
-                     ndata->delta.v[1]*ndata->delta.v[1]);
-  delta_rot2 = angle_diff(ndata->delta.v[2], delta_rot1);
-  bool screening = false;
-  double min_trans, max_trans;
-  double min_rot1, max_rot1;
-  int odom_update_counter = 0;
-  for (int i = 0 ; i < set_a->sample_count; ++i)
-  {
-    sample_a = set_a->samples + i;
-    //slective update
-    if ( set_b->samples[i].weight < epson_ )//if bel(xt-1)
-    {
-      sample_a->weight = epson_;//then bel(xt)~=epson
-      total +=sample_a->weight;
-      continue;
-    }
-    //select neibours of sample_a + ndata->delta within 3 meters radius
-    std::vector<int> neighbor_indices;
-    pf_vector_t center_pose;
-    center_pose.v[0] = sample_a->pose.v[0]+delta_trans * 
-            cos(sample_a->pose.v[2] + delta_rot1);
-    center_pose.v[1] = sample_a->pose.v[1]+delta_trans * 
-            sin(sample_a->pose.v[2] + delta_rot1);
-    //center_pose.v[2] = amcl::normalize(sample_a->pose.v[2]+delta_rot1 + delta_rot2);
-    for(double px = center_pose.v[0] - radius_; px <= center_pose.v[0] + radius_; px+=map_->scale)// minpX~maxpX
-    {
-      int map_idx_x = MAP_GXWX(map_,px);
-      for(double py = center_pose.v[1] - radius_; py <= center_pose.v[1] + radius_; py+=map_->scale)// minpY~maxpY
-      {
-        if(sqrt((px-center_pose.v[0])*(px-center_pose.v[0])+(py-center_pose.v[1])*(py-center_pose.v[1])) > radius_)
-          continue;
-        int map_idx_y = MAP_GYWY(map_,py);
-        if(MAP_VALID(map_,map_idx_x,map_idx_y)==false || (map_->cells[MAP_INDEX(map_,map_idx_x,map_idx_y)].occ_state != -1))
-          continue;
-        int free_space_idx = free_space_positions_[map_idx_x][map_idx_y];
-        assert(free_space_idx >=0);
-        neighbor_indices.push_back(free_space_idx);
-      }
-    }
-    double probi = 0.0;
-    //for each in neighbor_indices
-    for(int nidx:neighbor_indices)
-    {
-      int stride = nidx * size_a_;
-      for(int aidx = 0 ; aidx < size_a_; ++aidx)
-      {
-        sample_b = set_b->samples + stride + aidx;
-        probi += (sample_b->weight * motionModelS(sample_b, sample_a, odom_, delta_rot1, delta_trans, delta_rot2));
-      }
-    }
-    sample_a->weight = probi;
-    total +=sample_a->weight;
-    ++odom_update_counter;
-    ROS_DEBUG("%d out of %ld",odom_update_counter, active_sample_indices_.size());
-  }
-  return total;
 }
 
 int MarkovNode::downsizingSampling(pf_sample_set_t* set_a, pf_sample_set_t* set_b, int target_size)
@@ -435,8 +344,6 @@ void MarkovNode::initialMarkovGrid()
       ++sidx;
     }
   }
-  positions_pub_.publish(positions_msg_);
-  indices_pub_.publish(free_idcs_msg_);
   //for(int s = 0 ; s < 2 ; ++s)
   //{
   //  int sidx = 0;
@@ -482,13 +389,14 @@ MarkovNode::MarkovNode(): MCL(),
   //maximize the buffer of laserReceive
   private_nh_.param("laser_buffer_size", laser_buffer_size_, 500);
   private_nh_.param("angular_resolution", ares_, 5);
+  private_nh_.param("cloud_size", cloud_size_, 10000);
   private_nh_.param("odom_update_radius", radius_, 3.0);
   size_a_ = (int)(360.0/ares_);
   max_particles_ = free_space_indices.size() * size_a_;
   epson_ = 1.0/max_particles_;
   active_sample_indices_.reserve(max_particles_);
   pf_free( pf_ );
-  pf_ = pf_alloc(min_particles_, 10000,//for sampling from grid_
+  pf_ = pf_alloc(min_particles_, cloud_size_,//for sampling from grid_
                  alpha_slow_, alpha_fast_,
                  (pf_init_model_fn_t)MCL::uniformPoseGenerator,
                  (void *)map_);
@@ -504,9 +412,9 @@ MarkovNode::MarkovNode(): MCL(),
               this, _1));
 
   //setting up publishers
-  histograms_pub_ = private_nh_.advertise<stamped_std_msgs::StampedFloat64MultiArray>("histograms",1);
-  positions_pub_ = private_nh_.advertise<std_msgs::Float64MultiArray>("positions",1);
-  indices_pub_ = private_nh_.advertise<std_msgs::UInt16MultiArray>("indices",1);
+  histograms_pub_ = private_nh_.advertise<stamped_std_msgs::StampedFloat64MultiArray>("/histograms",1);
+  positions_pub_ = private_nh_.advertise<std_msgs::Float64MultiArray>("/positions",1);
+  indices_pub_ = private_nh_.advertise<std_msgs::UInt16MultiArray>("/indices",1);
 
   ROS_DEBUG("MarkovNode::MarkovNode() has successfully reset laser_scan_filter_.");
   //disable global localization
@@ -641,14 +549,11 @@ MarkovNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     //odom_->UpdateAction(pf_, (amcl::AMCLSensorData*)&odata);
     //requires grid_ current set and previous set
     ros::Time beg_odom = ros::Time::now();
-    //TODO implement UpdataSensor in MarkovNode
+    //implement UpdataSensor in MarkovNode
     //double totalweight = odom_->UpdateSensor(grid_, (amcl::AMCLSensorData*)&odata);
     ROS_DEBUG("begin original odometry update. current_set:%d\n",grid_->current_set);
     double totalweight = UpdateOdomO(&odata);
     ROS_DEBUG("finished original odometry update. It takes %f\n", (ros::Time::now() - beg_odom).toSec());
-    //ROS_DEBUG("begin odometry update. current_set:%d\n",grid_->current_set);
-    //totalweight = UpdateOdom(&odata);
-    //ROS_DEBUG("finished odometry update. It takes %f\n", (ros::Time::now() - beg_odom).toSec());
     //normalization of weight
     double w_avg = pf_normalize(grid_, totalweight);
     // Pose at last filter update
@@ -683,8 +588,12 @@ MarkovNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
         active_sample_indices_.push_back(idx);
     }
     histograms_pub_.publish(hist_msg);
-
-    ROS_DEBUG("Num samples whose weight lager than %f: %ld/%d\n", epson_, active_sample_indices_.size(), max_particles_);
+    if(resample_count_<1)
+    {
+      positions_pub_.publish(positions_msg_);
+      indices_pub_.publish(free_idcs_msg_);
+    }
+    ROS_DEBUG("Num samples whose weight larger than %e: %ld/%d\n", epson_, active_sample_indices_.size(), max_particles_);
     //pf_update_augmented_weight(pf_, w_avg);
 
     lasers_update_[laser_index] = false;
@@ -694,9 +603,7 @@ MarkovNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     // Resample the particles
     if(!(++resample_count_ % resample_interval_))
     {
-      //sampling 10000 particles from grid and cluster the 10000 particles
-      //TODO parameterize the number of sampling
-      downsizingSampling(grid_->sets+grid_->current_set, pf_->sets+pf_->current_set, 10000);
+      downsizingSampling(grid_->sets+grid_->current_set, pf_->sets+pf_->current_set, cloud_size_);
       //resample_function_(pf_);
       resampled = true;
     }

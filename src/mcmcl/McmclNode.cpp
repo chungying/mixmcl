@@ -268,11 +268,11 @@ McmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     geometry_msgs::PoseArray rejected_cloud;
     rejected_cloud.header.stamp = laser_scan->header.stamp;
     rejected_cloud.header.frame_id = global_frame_id_;
-    //double total = metropolisNEvaluation(accepted_cloud, rejected_cloud, ldata);
     double total = metropolisNEvaluation(accepted_cloud, rejected_cloud, ldata, ita_);
     MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
     double w_avg = pf_normalize(pf_, total);
-
+    //TODO publish weighted particles to wpc_pub_
+    //MCL::publishWeightedParticleCloud(wpc_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
     // Resample the particles
     if(!(++resample_count_ % resample_interval_) || 
         (force_publication ==true && sent_first_transform_ == false))
@@ -307,6 +307,7 @@ McmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     {
       MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
       double w_avg = pf_normalize(pf_, total);
+    //TODO publish weighted particles to wpc_pub_
       resample_function_(pf_);
     }
     //Publish the resulting cloud
@@ -479,6 +480,7 @@ double McmclNode::metropolisNEvaluation(geometry_msgs::PoseArray& accepted_cloud
     required: shared_ptr<KernelCollection> kdt_
     required: double ita_
   */
+  //TODO iterations of Metropolis-Hasting Markov Chain algorithm
   int set_a_idx = pf_->current_set;
   int set_b_idx = (pf_->current_set + 1 ) % 2;
   pf_sample_set_t* set_a = pf_->sets + set_a_idx;

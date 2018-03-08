@@ -298,6 +298,7 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   pf_vector_t delta = pf_vector_zero();
   pf_vector_t inverse_delta = pf_vector_zero();
   amcl::AMCLOdomData odata;
+  //TODO remove inverse_odata
   amcl::AMCLOdomData inverse_odata;
 
   if(pf_init_)
@@ -379,8 +380,9 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   {
     amcl::AMCLLaserData ldata;
     MCL::createLaserData(laser_index, ldata, laser_scan);
+    //drawing samples from pre-built kernel density tree and current measurement model
     double total =  dualmclNEvaluation(ldata, inverse_odata);
-    //publish the particle cloud
+    //publish the samples to particlecloud2 topic
     //note that this cloud has been applied the inverse odata.
     pf_->current_set = set_b_idx;
     MCL::publishParticleCloud(particlecloud2_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
@@ -400,7 +402,8 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     set_a->sample_count += set_b->sample_count;
     pf_->current_set = set_a_idx;
     double w_avg = pf_normalize(pf_, total);
-
+    //TODO publish weighted particles to wpc_pub_
+    //MCL::publishWeightedParticleCloud(wpc_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
     lasers_update_[laser_index] = false;
     pf_odom_pose_ = pose;
 
@@ -559,6 +562,7 @@ MixmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
 
 }
 
+//TODO remove inverse_odata
 double MixmclNode::dualmclNEvaluation(amcl::AMCLLaserData& ldata, amcl::AMCLOdomData& inverse_odata)
 {
   const int set_a_idx = pf_->current_set;
@@ -586,7 +590,7 @@ double MixmclNode::dualmclNEvaluation(amcl::AMCLLaserData& ldata, amcl::AMCLOdom
   {
     // *iter returns a reference to a datapoint/kernel of tree
     // iter.index() returns the index (in tree) of that element.
-    std::auto_ptr<kernel::se3> se3_pose = (*iter).polySe3Sample();
+    boost::shared_ptr<kernel::se3> se3_pose = (*iter).polySe3Sample();
     //convert kernel base se3_pose into pf_vecter_t.
     pf_vector_t vec_p;
     se3ToPose(*se3_pose, vec_p);
@@ -597,22 +601,6 @@ double MixmclNode::dualmclNEvaluation(amcl::AMCLLaserData& ldata, amcl::AMCLOdom
     sample_b->weight = ita_ * kdt_->evaluationAt(*se3_pose);
     dual_set_total += sample_b->weight;
   }
-
-  ////publish the particle cloud
-  ////note that this cloud has been applied the inverse odata.
-  //pf_->current_set = set_b_idx;
-  //MCL::publishParticleCloud(particlecloud2_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
-  ////Finally, combine the set together into set_a
-  //assert((set_a->sample_count + set_b->sample_count)<=max_particles_);
-  //for(int i = 0; i < set_b->sample_count ; ++i)
-  //{
-  //  sample_a = set_a->samples + set_a->sample_count + i;
-  //  sample_b = set_b->samples + i;
-  //  sample_a->pose = sample_b->pose;
-  //  sample_a->weight = sample_b->weight;
-  //}
-  //set_a->sample_count += set_b->sample_count;
-  //pf_->current_set = set_a_idx;
   return dual_set_total + regular_set_total;
 }
 

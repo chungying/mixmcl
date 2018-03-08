@@ -197,6 +197,8 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     double total = lasers_[laser_index]->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
     double w_avg = pf_normalize(pf_, total);
     pf_update_augmented_weight(pf_, w_avg);
+    //TODO publish weighted particles to wpc_pub_
+    MCL::publishWeightedParticleCloud(wpc_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
 
     lasers_update_[laser_index] = false;
 

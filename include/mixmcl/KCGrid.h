@@ -9,7 +9,7 @@
 #include "mixmcl/laser_feature.h"
 #include "boost/smart_ptr.hpp"
 #include "boost/ptr_container/ptr_map.hpp"
-#include "pcl/kdtree/flann.h"
+#include <flann/flann.hpp>
 #include "tf/tf.h"
 //read in param.txt 
 //sotre the parameters as a std::map

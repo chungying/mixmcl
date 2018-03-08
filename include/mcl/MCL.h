@@ -30,6 +30,7 @@
 #include "nav_msgs/SetMap.h"
 #include "nav_msgs/Odometry.h"
 #include "std_srvs/Empty.h"
+#include "stamped_std_msgs/StampedFloat64MultiArray.h"
 
 // For transform support
 #include "tf/transform_broadcaster.h"
@@ -128,12 +129,9 @@ class MCL
 
     static inline double getYaw(tf::Pose& t);
 
-    static void publishParticleCloud(
-      ros::Publisher& particlecloud_pub_,
-      const std::string& global_frame_id_,
-      const ros::Time& stamp,
-      pf_t* pf_,
-      int set_drift);
+    static void publishParticleCloud( ros::Publisher& particlecloud_pub_, const std::string& global_frame_id_, const ros::Time& stamp, pf_t* pf_, int set_drift);
+
+    static void publishWeightedParticleCloud( ros::Publisher& wpc_pub_, const std::string& global_frame_id_, const ros::Time& stamp, pf_t* pf_, int set_drift);
 
     void createLaserData(int laser_index, amcl::AMCLLaserData& ldata, const sensor_msgs::LaserScanConstPtr& laser_scan);
 
@@ -230,6 +228,7 @@ class MCL
     ros::NodeHandle private_nh_;
     ros::Publisher pose_pub_;
     ros::Publisher particlecloud_pub_;
+    ros::Publisher wpc_pub_;//weighted particle cloud;
     ros::ServiceServer global_loc_srv_;
     ros::ServiceServer nomotion_update_srv_; //to let amcl update samples without requiring motion
     ros::ServiceServer set_map_srv_;
@@ -308,6 +307,38 @@ MCL<D>::getYaw(tf::Pose& t)
 }
 
 template<class D>
+void MCL<D>::publishWeightedParticleCloud(
+  ros::Publisher& wpc_pub_,
+  const std::string& global_frame_id,
+  const ros::Time& stamp,
+  pf_t* pf_,
+  int set_shift = 0)
+{
+  // Publish the resulting cloud
+  pf_sample_set_t* set = pf_->sets + ((pf_->current_set + set_shift) % 2);
+  ROS_INFO("publishing %d weighted particles",set->sample_count);
+  stamped_std_msgs::StampedFloat64MultiArray wpc_msg;
+  wpc_msg.header.frame_id = global_frame_id;
+  wpc_msg.header.stamp = stamp;
+  wpc_msg.array.layout.dim.resize(2);
+  wpc_msg.array.layout.dim[0].label = "particle";
+  wpc_msg.array.layout.dim[0].size = set->sample_count;
+  wpc_msg.array.layout.dim[0].stride = set->sample_count * 4;
+  wpc_msg.array.layout.dim[1].label = "xyaw";
+  wpc_msg.array.layout.dim[1].size = 4;
+  wpc_msg.array.layout.dim[1].stride = 4;
+  wpc_msg.array.data.resize(set->sample_count);
+  for(int idx=0; idx < set->sample_count;++idx)
+  {
+    wpc_msg.array.data[idx*4  ] = set->samples[idx].pose.v[0];
+    wpc_msg.array.data[idx*4+1] = set->samples[idx].pose.v[1];
+    wpc_msg.array.data[idx*4+2] = set->samples[idx].pose.v[2];
+    wpc_msg.array.data[idx*4+3] = set->samples[idx].weight;
+  }
+  wpc_pub_.publish(wpc_msg);
+}
+
+template<class D>
 void MCL<D>::publishParticleCloud(
   ros::Publisher& particlecloud_pub_,
   const std::string& global_frame_id_,
@@ -317,7 +348,7 @@ void MCL<D>::publishParticleCloud(
 {
   // Publish the resulting cloud
   pf_sample_set_t* set = pf_->sets + ((pf_->current_set + set_shift) % 2);
-  ROS_INFO("printing %d particles",set->sample_count);
+  ROS_INFO("publishing %d particles",set->sample_count);
   geometry_msgs::PoseArray cloud_msg;
   cloud_msg.header.stamp = stamp;
   cloud_msg.header.frame_id = global_frame_id_;

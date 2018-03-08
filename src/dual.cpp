@@ -195,7 +195,7 @@ void DualNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   {
     // *iter returns a reference to a datapoint/kernel of tree
     // iter.index() returns the index (in tree) of that element.
-    std::auto_ptr<kernel::se3> se3_pose = (*siter).polySe3Sample();
+    boost::shared_ptr<kernel::se3> se3_pose = (*siter).polySe3Sample();
     //convert kernel base se3_pose into pf_vecter_t.
     pf_vector_t vec_pose;
     se3ToPose(*se3_pose, vec_pose);

@@ -295,7 +295,7 @@ void KCGrid::convert(map<string, any>& m, double loch, double orih)
         tree_map_.size(),
         3//dimension is 3 x, y, and d
       ),
-      ::flann::KDTreeSingleIndexParams(2)//this is a discrete kdtree so doesn't need very much nodes
+      ::flann::KDTreeSingleIndexParams(2)//this doesn't need many nodes
     )
   );
   flann_index_->buildIndex();

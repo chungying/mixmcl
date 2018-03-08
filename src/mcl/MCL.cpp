@@ -112,6 +112,7 @@ MCL<D>::MCL() :
   cloud_pub_interval.fromSec(1.0);
   pose_pub_ = nh_.advertise<geometry_msgs::PoseWithCovarianceStamped>("mcl_pose", 2, true);
   particlecloud_pub_ = nh_.advertise<geometry_msgs::PoseArray>("particlecloud", 2, true);
+  wpc_pub_ = nh_.advertise<stamped_std_msgs::StampedFloat64MultiArray>("weighted_pc", 2, true);
 
   //generic services
   //nomotionUpdateCallback is generic
