@@ -8,6 +8,9 @@
 ### Installation
 #### Nuklei
 #### FLANN
+```
+$ sudo apt-get install -y libflann-dev
+```
 
 ## Functions
 * MCL with mixture proposals by using pre-built sampling
