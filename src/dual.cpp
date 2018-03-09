@@ -184,7 +184,7 @@ void DualNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   laser_feature_t feature = polygonCentroid(ldata);
   std::stringstream ss;
   boost::shared_ptr<const KernelCollection> tree = kcgrid_->getTree(feature.x, feature.y, feature.dist, ss);
-  ROS_DEBUG_STREAM(ss);
+  ROS_DEBUG("%s",ss.str().c_str());
 
   KernelCollection::const_sample_iterator siter = as_const(*(tree.get())).sampleBegin(tree->size());
   geometry_msgs::PoseArray sampling_cloud;

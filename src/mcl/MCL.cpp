@@ -700,7 +700,7 @@ MCL<D>::runFromBag(const std::string &in_bag_fn)
       continue;
     }
 
-    ROS_WARN_STREAM("Unsupported message type" << msg.getTopic());
+    ROS_WARN("Unsupported message type %s", msg.getTopic().c_str());
   }
 
   bag.close();

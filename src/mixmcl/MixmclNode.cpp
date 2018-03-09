@@ -583,7 +583,7 @@ double MixmclNode::dualmclNEvaluation(amcl::AMCLLaserData& ldata, amcl::AMCLOdom
   //get the corresponding tree from the pre-built density trees.
   stringstream ss;
   boost::shared_ptr<KernelCollection> tree = kcgrid_->getTree(feature.x, feature.y, feature.dist, ss);
-  ROS_DEBUG_STREAM(ss);
+  ROS_DEBUG("%s",ss.str().c_str());
   //drawing samples from the pre-built tree into set_b
   KernelCollection::const_sample_iterator iter = as_const(*(tree.get())).sampleBegin(set_b->sample_count);
   for(int i = 0; iter != iter.end(); ++iter, ++i)

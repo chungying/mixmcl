@@ -1,7 +1,6 @@
 #include "mcl/MCL.h"
 #include "mixmcl/laser_feature.h"
 #include "mixmcl/KCGrid.h"
-
 // Dynamic_reconfigure
 #include "mixmcl/MIXMCLConfig.h"
 
