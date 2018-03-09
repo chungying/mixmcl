@@ -226,18 +226,31 @@ target_link_libraries(multi_array_test
   ${catkin_LIBRARIES}
 )
 
+#executables
 install( TARGETS
     mixmcl amcl mcmcl buildKDT iotest roscheck dual markov
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
-
+#shell scripts
+install( PROGRAMS
+    script/kill.sh script/mkdatadir.sh script/playkill.sh script/rp.sh script/rpNmv.sh
+    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+#libraries
 install( TARGETS
-    mcl dualmcl_tool 
+    mcl dualmcl_tool mixmcl_node amcl_node mcmcl_node markov_node
     LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )
-
+#includes
 install(DIRECTORY include
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+)
+#bag files
+#yaml files
+#launch files
+#rosconsole logging level file
+install(DIRECTORY bags yaml launch config maps
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
 #message(STATUS "CATKIN_PACKAGE_SHARE_DESTINATION is ${CATKIN_PACKAGE_SHARE_DESTINATION}")

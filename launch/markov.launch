@@ -9,8 +9,8 @@
   <arg name="resample_interval" default="1" />
   <arg name="launch-prefix" default="" />
   <arg name="record" default="true" />
-  <arg name="bagfile" default="/home/jolly/rosbag/ex3/2018-01-23-22-37-47-clean.bag"/>
-  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-topleft.yaml" />
+  <arg name="bagfile" default="$(find mixmcl)/bags/ex3/2018-01-23-22-37-47-clean.bag"/>
+  <arg name="map_yaml" default="$(find mixmcl)/maps/willowgarage/willowgarage-topleft.yaml" />
   <arg name="suicide"/>
   <!--not used-->
   <arg name="global_localization" default="true"/>
@@ -23,8 +23,8 @@
     <param name="resample_interval" value="$(arg resample_interval)"/>
     <param name="laser_model_type" value="likelihood_field"/>
     <param name="max_particles" value="10000" />
-    <param name="angular_resolution" value="90" />
     <!--
+    <param name="angular_resolution" value="90" />
     <param name="resample_type" value="lowvariance"/>
     <param unless="$(arg global_localization)" name="initial_pose_x" value="$(arg init_x)"/>
     <param unless="$(arg global_localization)" name="initial_pose_y" value="$(arg init_y)"/>

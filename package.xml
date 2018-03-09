@@ -33,6 +33,7 @@
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_srvs</build_export_depend>
   <build_export_depend>tf</build_export_depend>
+  <exec_depend>map_server</exec_depend>
   <exec_depend>amcl_modified</exec_depend>
   <exec_depend>dynamic_reconfigure</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
