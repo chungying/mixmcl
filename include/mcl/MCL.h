@@ -129,9 +129,9 @@ class MCL
 
     static inline double getYaw(tf::Pose& t);
 
-    static void publishParticleCloud( ros::Publisher& particlecloud_pub_, const std::string& global_frame_id_, const ros::Time& stamp, pf_t* pf_, int set_drift);
+    static void publishParticleCloud( ros::Publisher& particlecloud_pub_, const std::string& global_frame_id_, const ros::Time& stamp, pf_t* pf_, int set_drift = 0);
 
-    static void publishWeightedParticleCloud( ros::Publisher& wpc_pub_, const std::string& global_frame_id_, const ros::Time& stamp, pf_t* pf_, int set_drift);
+    static void publishWeightedParticleCloud( ros::Publisher& wpc_pub_, const std::string& global_frame_id_, const ros::Time& stamp, pf_t* pf_, int set_drift = 0);
 
     void createLaserData(int laser_index, amcl::AMCLLaserData& ldata, const sensor_msgs::LaserScanConstPtr& laser_scan);
 
@@ -312,7 +312,7 @@ void MCL<D>::publishWeightedParticleCloud(
   const std::string& global_frame_id,
   const ros::Time& stamp,
   pf_t* pf_,
-  int set_shift = 0)
+  int set_shift)
 {
   // Publish the resulting cloud
   pf_sample_set_t* set = pf_->sets + ((pf_->current_set + set_shift) % 2);
@@ -344,7 +344,7 @@ void MCL<D>::publishParticleCloud(
   const std::string& global_frame_id_,
   const ros::Time& stamp,
   pf_t* pf_,
-  int set_shift = 0)
+  int set_shift)
 {
   // Publish the resulting cloud
   pf_sample_set_t* set = pf_->sets + ((pf_->current_set + set_shift) % 2);
