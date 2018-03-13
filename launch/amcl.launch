@@ -10,8 +10,8 @@
   <arg name="resample_interval" default="1" />
   <arg name="launch-prefix" default="" />
   <arg name="record" default="true" />
-  <arg name="mclargs" default="--run-from-bag $(arg bagfile)"/>
   <arg name="bagfile" default="$(find mixmcl)/bags/ex3/2018-01-23-22-37-47-clean.bag"/>
+  <arg name="mclargs" default="--run-from-bag $(arg bagfile)"/>
   <arg name="map_yaml" default="$(find mixmcl)/maps/willowgarage/willowgarage-topleft.yaml" />
   <arg name="suicide"/>
   <!--
