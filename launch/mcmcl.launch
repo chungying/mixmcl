@@ -10,8 +10,8 @@
   <arg name="resample_interval" default="1" />
   <arg name="launch-prefix" default="" />
   <arg name="record" default="true" />
-  <arg name="bagfile" default="/home/jolly/rosbag/ex3/2018-01-23-22-37-47-clean.bag"/>
-  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-topleft.yaml" />
+  <arg name="bagfile" default="$(find mixmcl)/bags/ex3/2018-01-23-22-37-47-clean.bag"/>
+  <arg name="map_yaml" default="$(find mixmcl)/maps/willowgarage/willowgarage-topleft.yaml" />
   <arg name="suicide"/>
   <!--
   <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />

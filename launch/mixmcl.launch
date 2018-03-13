@@ -11,13 +11,13 @@
   <arg name="dual_normalizer_ita" default="1e-1" />
   <arg name="launch-prefix" default="" />
   <arg name="record" default="true" />
-  <arg name="bagfile" default="/home/jolly/rosbag/ex3/2018-01-23-22-37-47-clean.bag"/>
-  <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-topleft.yaml" />
+  <arg name="bagfile" default="$(find mixmcl)/bags/ex3/2018-01-23-22-37-47-clean.bag"/>
+  <arg name="map_yaml" default="$(find mixmcl)/maps/willowgarage/willowgarage-topleft.yaml" />
   <arg name="suicide"/>
   <!--
   <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
   -->
-  <node pkg="mixmcl" type="mixmcl" name="mixmcl" output="screen" args="--run-from-bag $(arg bagfile)">
+  <node pkg="mixmcl" type="mixmcl" name="mixmcl" output="screen" args="--run-from-bag $(arg bagfile)" launch-prefix="$(arg launch-prefix)">
     <remap from="scan" to="$(arg scan_topic)" />
     <rosparam command="load" file="$(find mixmcl)/yaml/amcl.yaml"/>
     <param unless="$(arg global_localization)" name="initial_pose_x" value="$(arg init_x)"/>
