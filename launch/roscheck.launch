@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="suicide" default="sss"/>
+  <arg name="args" default="argumrnts:$(arg suicide)" />
+  <node pkg="mixmcl" type="roscheck" name="roscheck" output="screen" args="$(arg args)">
+  </node>
+
+</launch>

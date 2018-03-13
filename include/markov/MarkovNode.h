@@ -31,7 +31,7 @@ class MarkovNode : public MCL<MarkovNode>
     std_msgs::Float64MultiArray positions_msg_;
     ros::Publisher indices_pub_;
     std_msgs::UInt16MultiArray free_idcs_msg_;
-    std::vector<std::vector<int> > free_space_positions_;
+    std::vector<std::vector<int> > mapidx2freeidx_;
     pf_t *grid_;
     int cloud_size_;
     int ares_;

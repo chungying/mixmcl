@@ -4,7 +4,7 @@
   <env name="ROSCONSOLE_CONFIG_FILE" 
      value="$(find mixmcl)/config/custom_rosconsole.conf"/>
   <arg name="suicide" default="false"/>
-  <arg name="playbag" default="true"/>
+  <arg name="playbag" default="false"/>
   <arg name="record" default="false"/>
   <arg name="gazebo" default="false"/>
   <arg name="rviz" default="true"/>
@@ -12,25 +12,31 @@
   <!--MCL package parameters-->
   <arg name="mcl_prefix" default=""/>
   <arg name="mcl_pkg" default="amcl"/>
-  <arg name="global_localization" default="true"/>
+  <arg name="global_localization" default="false"/>
+  <arg name="init_x" default="4.0" />
+  <arg name="init_y" default="8.4" />
+  <arg name="init_a" default="3.14159265" />
+  <arg name="max_particles" default="3000"/>
+  <arg name="resample_interval" default="2"/>
+  <!--
   <arg name="init_x" default="-11" />
   <arg name="init_y" default="8.4" />
   <arg name="init_a" default="0" />
-  <arg name="max_particles" default="3000"/>
-  <arg name="resample_interval" default="2"/>
-  <arg name="bagfile" default="/home/jolly/rosbag/ex3/2018-01-23-22-37-47-clean.bag"/>
-  <!--
+  <arg name="init_x" default="4.0" />
+  <arg name="init_y" default="8.4" />
+  <arg name="init_a" default="3.14159265" />
   <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
+  <arg name="bagfile" default="/home/jolly/rosbag/ex3/2018-01-23-22-37-47-clean.bag"/>
   <arg name="bagfile" default="/home/jolly/rosbag/ex1/2018-01-14-14-13-24-clean.bag"/>
   <arg name="bagfile" default="/home/jolly/rosbag/ex2/2018-01-16-14-52-43-clean.bag"/>
-  -->
 
-  <!--MAP SERVER-->
   <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_yaml)" />
+  -->
 
   <!--AMCL and GAZEBO-->
   <include file="$(find mixmcl)/launch/$(arg mcl_pkg).launch">
     <arg name="launch-prefix" value="$(arg mcl_prefix)"/>
+    <remap from="scan" to="/p3dx/laser/scan"/>
     <!--
     <arg name="init_x" value="-9"/>
     <arg name="init_y" value="6.4"/>
@@ -43,6 +49,9 @@
     <arg name="init_a" value="$(arg init_a )"/>
     <arg name="max_particles" value="$(arg max_particles)"/>
     <arg name="resample_interval" value="$(arg resample_interval)"/>
+    <arg name="map_yaml" value="$(arg map_yaml)"/>
+    <arg name="suicide" value="$(arg suicide)"/>
+    <arg name="mclargs" value=""/>
   </include>
 
   <!--P3DX in GAZEBO-->
@@ -53,7 +62,7 @@
     <arg name="init_a" value="$(arg init_a )"/>
   </include>
 
-  <node name="rosbagrecorder" pkg="rosbag" type="record" if="$(arg record)" output="screen" args="-o $(arg mcl_pkg) /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
+  <node name="rosbagrecorder" pkg="rosbag" type="record" if="$(arg record)" output="screen" args="-o $(arg mcl_pkg) /tf /p3dx/laser/scan /p3dx/odom /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
 
 <!--
   <group if="$(arg playbag)">

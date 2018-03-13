@@ -117,7 +117,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   size_a_
   ares_
   map_
-  free_space_positions_
+  mapidx2freeidx_
   */
 
   /*common mutable input:
@@ -131,7 +131,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   */
   int percent_count;
   auto worker2 = [&worker2_mutex, set_a, set_b, X, Y, &mat_prob_matrices, &ang_arr, &percent_count]
-  (double& total_weight, int& sample_counter, int const total_sample, vector<int>::iterator sample_beg, vector<int>::iterator sample_end, int const size_a_, map_t const * map_, vector<vector<int> >& free_space_positions_, int const ares_)
+  (double& total_weight, int& sample_counter, int const total_sample, vector<int>::iterator sample_beg, vector<int>::iterator sample_end, int const size_a_, map_t const * map_, vector<vector<int> >& mapidx2freeidx_, int const ares_)
   {
     for(auto iter = sample_beg; iter != sample_end; ++iter)
     {
@@ -151,7 +151,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
         if(MAP_VALID(map_,ngb_map_idx_x,ngb_map_idx_y)==false || (map_->cells[MAP_INDEX(map_,ngb_map_idx_x,ngb_map_idx_y)].occ_state != -1))
           continue;
         //save indices of valid neighbors
-        free_ngb_indices.push_back(free_space_positions_[ngb_map_idx_x][ngb_map_idx_y]);
+        free_ngb_indices.push_back(mapidx2freeidx_[ngb_map_idx_x][ngb_map_idx_y]);
         local_ngb_indices.push_back(nidx);
       }
       VecMatrices& vec_prob_matrices = mat_prob_matrices[ANG2IDX(sample_origin->pose.v[2], ares_)];
@@ -185,10 +185,10 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   ROS_INFO("percent_count of total_sample: %d of %d", percent_count, total_sample);
   for(auto tit = std::begin(threads2); tit != std::end(threads2)-1 ; ++tit)
   {
-    *tit = std::thread(worker2, std::ref(total_weight), std::ref(sample_counter), total_sample, sit, sit+grainsize, size_a_, map_, std::ref(free_space_positions_), ares_);
+    *tit = std::thread(worker2, std::ref(total_weight), std::ref(sample_counter), total_sample, sit, sit+grainsize, size_a_, map_, std::ref(mapidx2freeidx_), ares_);
     sit+=grainsize;
   }
-  threads2.back() = std::thread(worker2, std::ref(total_weight), std::ref(sample_counter), total_sample, sit, std::end(active_sample_indices_), size_a_, map_, std::ref(free_space_positions_), ares_);
+  threads2.back() = std::thread(worker2, std::ref(total_weight), std::ref(sample_counter), total_sample, sit, std::end(active_sample_indices_), size_a_, map_, std::ref(mapidx2freeidx_), ares_);
   //wait threads finished
   for(auto&& thread: threads2) {
     thread.join();
@@ -257,7 +257,7 @@ void MarkovNode::initialMarkovGrid()
     map_y = free_space_indices[i].second;
     assert(map_x >=0);
     assert(map_y >=0);
-    free_space_positions_[map_x][map_y] = i;
+    mapidx2freeidx_[map_x][map_y] = i;
   }
   //initialize particle grid
   
@@ -327,7 +327,7 @@ void MarkovNode::initialMarkovGrid()
     positions_msg_.data[free_idx * 2] = position_x;
     positions_msg_.data[free_idx*2+1] = position_y;
 
-    int free_space_idx = free_space_positions_[map_idx_x][map_idx_y];
+    int free_space_idx = mapidx2freeidx_[map_idx_x][map_idx_y];
     assert(free_space_idx == free_idx);
     for(int a = 0 ; a < size_a_;++a)
     {
@@ -355,7 +355,7 @@ void MarkovNode::initialMarkovGrid()
   //      sample->pose.v[0] = MAP_WXGX(map_, p.first);
   //      sample->pose.v[1] = MAP_WYGY(map_, p.second);
   //      sample->pose.v[2] = IDX2ANG(a, ares_);
-  //      int free_space_idx = free_space_positions_[MAP_GXWX(map_,sample->pose.v[0])][MAP_GYWY(map_,sample->pose.v[1])];
+  //      int free_space_idx = mapidx2freeidx_[MAP_GXWX(map_,sample->pose.v[0])][MAP_GYWY(map_,sample->pose.v[1])];
   //      int ang_idx = ANG2IDX(sample->pose.v[2], ares_);
   //      int sample_idx = free_space_idx * size_a_ + ang_idx;
   //      assert(sample_idx == sidx);
@@ -382,7 +382,7 @@ MarkovNode::~MarkovNode(){
 }
 MarkovNode::MarkovNode(): MCL(),
   grid_(NULL),
-  free_space_positions_(map_->size_x,std::vector<int>(map_->size_y, -1))
+  mapidx2freeidx_(map_->size_x,std::vector<int>(map_->size_y, -1))
 {
   boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
   ROS_DEBUG("MarkovNode::MarkovNode() is allocating laser_scan_filter_.");
