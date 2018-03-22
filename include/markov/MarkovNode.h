@@ -7,6 +7,7 @@
 #include <functional>
 //convert from angle to index
 #define ANG2IDX(ang, ares) (floor(((ang + M_PI)/M_PI)*(180.0/ares)+0.5))
+//#define ANG2IDX(ang, size3D) ( ( (int)floor(((ang + M_PI)/M_PI)*(size3D/2)+0.5) ) % size3D )
 //convert from index to angle
 #define IDX2ANG(idx, ares) (-M_PI+((idx*ares)/180.0)*M_PI)
 
