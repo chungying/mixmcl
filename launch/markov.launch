@@ -2,9 +2,6 @@
 <launch>
   <env name="ROSCONSOLE_CONFIG_FILE" value="$(find mixmcl)/config/custom_rosconsole.conf"/>
   <arg name="scan_topic" default="/p3dx/laser/scan"/>
-  <arg name="init_x" default="4.0" />
-  <arg name="init_y" default="8.4" />
-  <arg name="init_a" default="3.14159265" />
   <arg name="max_particles" default="2000" />
   <arg name="resample_interval" default="1" />
   <arg name="launch-prefix" default="" />
@@ -16,6 +13,9 @@
   <arg name="global_localization" default="true"/>
   <!--
   <arg name="map_yaml" default="$(find p3dx_2dnav)/maps/willowgarage/willowgarage-refined.yaml" />
+  <arg name="init_x" default="4.0" />
+  <arg name="init_y" default="8.4" />
+  <arg name="init_a" default="3.14159265" />
   -->
   <node pkg="mixmcl" type="markov" name="markov" output="screen" args="--run-from-bag $(arg bagfile)" launch-prefix="$(arg launch-prefix)">
     <remap from="scan" to="$(arg scan_topic)" />
@@ -23,6 +23,10 @@
     <param name="resample_interval" value="$(arg resample_interval)"/>
     <param name="laser_model_type" value="likelihood_field"/>
     <param name="max_particles" value="10000" />
+    <param name="update_min_d" value="0.5"/>
+    <!--
+    <param name="" value=""/>
+    -->
     <!--
     <param name="angular_resolution" value="90" />
     <param name="resample_type" value="lowvariance"/>

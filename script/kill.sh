@@ -16,7 +16,7 @@ else
   echo "checking rosmaster"
   rosrun mixmcl roscheck || exit 3
   echo "checking $1 pulse"
-  rosnode ping $1
+  rosnode ping $1 > /dev/null
   #echo "palying the rosbag file: $1"
   #if [[ "$2" == "mixmcl" ]]; then
   #  echo "delay rosplay for waiting mixmcl"
