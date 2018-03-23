@@ -20,7 +20,7 @@ find_package(catkin REQUIRED
     random_numbers
 )
 
-find_package(Boost REQUIRED)
+find_package(Boost REQUIRED python)
 
 INCLUDE(FindPkgConfig)
 pkg_check_modules(nuklei REQUIRED nuklei)
@@ -51,13 +51,21 @@ include_directories(
 include_directories(
   ${catkin_INCLUDE_DIRS} 
   ${Boost_INCLUDE_DIRS}
+  ${Boost_INCLUDE_DIRS}/python2.7
   ${nuklei_INCLUDE_DIRS}
   ${amcl_modified_INCLUDE_DIRS}
   ${flann_INCLUDE_DIRS}
 )
 
-message(STATUS "amcl_modified_INCLUDE_DIRS is ${amcl_modified_INCLUDE_DIRS}")
+#message(STATUS "amcl_modified_INCLUDE_DIRS is ${amcl_modified_INCLUDE_DIRS}")
+message(STATUS "Boost_INCLUDE_DIRS is ${Boost_INCLUDE_DIRS}")
 ##Build libraries##
+add_library(hello_ext
+  src/boost_python.cpp
+)
+target_link_libraries(hello_ext
+  ${Boost_LIBRARIES}
+)
 add_library(mcl
   src/mcl/MCL.cpp
   src/amcl/pf/pf_resample.cpp

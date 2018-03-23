@@ -138,8 +138,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
       vector<int> free_ngb_indices, local_ngb_indices;
       free_ngb_indices.reserve(X->size());
       local_ngb_indices.reserve(X->size());
-      int origin_idx = *iter;
-      pf_sample_t* sample_origin = set_b->samples + origin_idx;
+      pf_sample_t* sample_origin = set_b->samples + (*iter);
       //create neighbor index lists, one for free_space, one for local
       //find valid neighbors according to position of sample_origin
       for(int nidx = 0; nidx < X->size(); ++nidx)
@@ -166,7 +165,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
           sample_origin_weight += set_b->samples[sample_ngb_idx].weight * motion_prob_mat[local_ngb_idx];
         }
       }
-      set_a->samples[origin_idx].weight = sample_origin_weight;
+      sample_origin.weight = sample_origin_weight;
       std::lock_guard<std::mutex> lg(worker2_mutex);
       total_weight += sample_origin_weight;
       ++sample_counter;
