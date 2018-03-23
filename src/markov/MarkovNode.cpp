@@ -36,7 +36,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
                      ndata->delta.v[1]*ndata->delta.v[1]);
   delta_rot2 = angle_diff(ndata->delta.v[2], delta_rot1);
   //size_a_ matsize*matsize-matrices origin_pose to size_a_*matsize*matsize poses
-  //update the 72 matrices for a base position (0,0) with headings at regular intervals of angular resolution ares_ from -M_PI to M_PI.
+  //update the 72 matrices for a base position (0,0) with headings at regular intervals of angular resolution ares_ from -M_PI to M_PI. Note that ares is degree
   //decide maximum and minimum of position X and Y
   //the difference from base position to each extremum is trans*(1+alpha3)
   radius = delta_trans*(1+odom_->alpha3*4);
@@ -388,7 +388,7 @@ MarkovNode::MarkovNode(): MCL(),
   ROS_DEBUG("MarkovNode::MarkovNode() is allocating laser_scan_filter_.");
   //maximize the buffer of laserReceive
   private_nh_.param("laser_buffer_size", laser_buffer_size_, 500);
-  private_nh_.param("angular_resolution", ares_, 5);
+  private_nh_.param("angular_resolution", ares_, 5);//the unit is degree
   private_nh_.param("cloud_size", cloud_size_, 10000);
   private_nh_.param("odom_update_radius", radius_, 3.0);
   size_a_ = (int)(360.0/ares_);
