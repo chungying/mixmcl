@@ -1,3 +1,5 @@
+#ifndef AMCLNODE_H
+#define AMCLNODE_H
 #include "mcl/MCL.h"
 
 class AmclNode : public MCL<AmclNode> 
@@ -14,3 +16,4 @@ class AmclNode : public MCL<AmclNode>
     void RCCB();
 };
 
+#endif//AMCLNODE_H
