@@ -24,6 +24,7 @@
     <param name="laser_model_type" value="likelihood_field"/>
     <param name="max_particles" value="10000" />
     <param name="update_min_d" value="0.5"/>
+    <param name="motion_update" value="false"/>
     <!--
     <param name="" value=""/>
     -->

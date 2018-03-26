@@ -7,10 +7,10 @@ using namespace std;
 //matrix vertion using original motion model
 double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
 {
-  //transform those matrices wrt each origin_pose in set_a
-  //multipy all the element into the set_b grid
+  //transform those matrices wrt each origin_pose in current_set
+  //multipy all the element into the next_set grid
   //sum up those resulting matrices
-  //assign the summation to origin_pose in set_a
+  //assign the summation to origin_pose in current_set
 
   vector<double> ang_arr;
   for(int aidx = 0; aidx < size_a_;++aidx)
@@ -35,7 +35,13 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   delta_trans = sqrt(ndata->delta.v[0]*ndata->delta.v[0] +
                      ndata->delta.v[1]*ndata->delta.v[1]);
   delta_rot2 = angle_diff(ndata->delta.v[2], delta_rot1);
-  //size_a_ matsize*matsize-matrices origin_pose to size_a_*matsize*matsize poses
+  //Definition:
+  //Matrix is a matrix with size of matsize by matsize 
+  //VecMatrix is size_a_ matrices 
+  //vector<double> side is an array ranging from -radius to radius with interval of map_->scale
+  //Matrix X and Y contain the position relative to origin_pose (0,0)
+
+  //size_a_ matrices origin_pose to size_a_*matsize*matsize poses
   //update the 72 matrices for a base position (0,0) with headings at regular intervals of angular resolution ares_ from -M_PI to M_PI. Note that ares is degree
   //decide maximum and minimum of position X and Y
   //the difference from base position to each extremum is trans*(1+alpha3)
@@ -59,11 +65,12 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
       Y->push_back(side[j]);
     }
   }
-  auto worker = [&ang_arr,X,Y,&delta_rot1,&delta_trans,&delta_rot2]
-  (aIter beg_oa, aIter end_oa, mIter beg_m, mIter end_m, amcl::AMCLOdom* odom)
+  MatMatrices mat_prob_matrices(size_a_, VecMatrices(size_a_, Matrix(X->size())));//for storing size_a_*size_a_ matrices
+  auto worker = [&ang_arr,X,Y,&delta_rot1,&delta_trans,&delta_rot2]//these are local variables within this function
+  (aIter beg_oa, aIter end_oa, mIter beg_m, mIter end_m, amcl::AMCLOdom* odom)//these are parameters for worker and private members of this class
   {
     mIter mit = beg_m;
-    for(aIter oait = beg_oa ; oait != end_oa ; ++oait, ++mit)
+    for(aIter particle_orientation_it = beg_oa ; particle_orientation_it != end_oa ; ++particle_orientation_it, ++mit)
     {
       //making the index of the matrix's angle
       for(int maidx = 0 ; maidx < ang_arr.size() ; ++maidx)
@@ -73,21 +80,19 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
         for(int i = 0; i < X->size();++i)
         {
           //calculate Tr, R1, R2
-          double tran, rot1, rot2;
-          odometry(0.0,0.0,(*oait),(*X)[i],(*Y)[i],ang_arr[maidx],rot1,tran,rot2);
+          double tran_hat, rot1_hat, rot2_hat;
+          odometry(0.0,0.0,(*particle_orientation_it),(*X)[i],(*Y)[i],ang_arr[maidx],rot1_hat,tran_hat,rot2_hat);
           //calculate P
-          double prob = motionModelO(odom, delta_rot1, delta_trans, delta_rot1, rot1, tran, rot2);
-          matrix.push_back(prob);
+          matrix.push_back(motionModelO(odom, delta_rot1, delta_trans, delta_rot1, rot1_hat, tran_hat, rot2_hat));
         }
       }
     }
   };
   //create threads
   vector<std::thread> threads(nb_threads);
-  aIter oait = std::begin(ang_arr);
-  MatMatrices mat_prob_matrices(size_a_, VecMatrices(size_a_, Matrix()));//for storing size_a_*size_a_ matrices
-  mIter mit = std::begin(mat_prob_matrices);
   int grainsize = (int)((double)ang_arr.size()/(double)nb_threads);
+  mIter mit = std::begin(mat_prob_matrices);
+  aIter oait = std::begin(ang_arr);
   for(auto tit = std::begin(threads); tit != std::end(threads)-1 ; ++tit)
   {
     *tit = std::thread(worker, oait, oait+grainsize, mit, mit+grainsize, odom_);
@@ -102,14 +107,14 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
 
   //update bel(xt-1,xt,action)
   //local variables
-  pf_sample_set_t* set_b = grid_->sets + (grid_->current_set+1)%2;
-  pf_sample_set_t* set_a = grid_->sets + grid_->current_set;
+  pf_sample_set_t* current_set = grid_->sets + grid_->current_set;
+  pf_sample_set_t* next_set = grid_->sets + (grid_->current_set+1)%2;
   double total_weight = 0;
   int sample_counter = 0;
   std::mutex worker2_mutex;
   /*common non-mutable input:
-  set_a
-  set_b
+  current_set
+  next_set
   X
   Y
   ang_arr
@@ -130,22 +135,23 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   vector<int>::iterator end
   */
   int percent_count;
-  auto worker2 = [&worker2_mutex, set_a, set_b, X, Y, &mat_prob_matrices, &ang_arr, &percent_count]
-  (double& total_weight, int& sample_counter, int const total_sample, vector<int>::iterator sample_beg, vector<int>::iterator sample_end, int const size_a_, map_t const * map_, vector<vector<int> >& mapidx2freeidx_, int const ares_)
+  auto worker2 = [&worker2_mutex, current_set, next_set, X, Y, &mat_prob_matrices, &ang_arr, &percent_count]
+  (double& total_weight, int& sample_counter, int const total_sample, vector<int>::iterator active_sample_beg, vector<int>::iterator active_sample_end, int const size_a_, map_t const * map_, vector<vector<int> >& mapidx2freeidx_, int const ares_)
   {
-    for(auto iter = sample_beg; iter != sample_end; ++iter)
+    //for each active particle
+    for(auto iter = active_sample_beg; iter != active_sample_end; ++iter)
     {
       vector<int> free_ngb_indices, local_ngb_indices;
+      //create neighbor index lists, one for free_space, one for local
       free_ngb_indices.reserve(X->size());
       local_ngb_indices.reserve(X->size());
-      pf_sample_t* sample_origin = set_b->samples + (*iter);
-      //create neighbor index lists, one for free_space, one for local
-      //find valid neighbors according to position of sample_origin
+      pf_sample_t* next_origin_particle = next_set->samples + (*iter);
+      //find valid neighbors of next_origin_particle
       for(int nidx = 0; nidx < X->size(); ++nidx)
       {
         //get translated positions based on each pair in X and Y
-        int ngb_map_idx_x = MAP_GXWX(map_,sample_origin->pose.v[0]+(*X)[nidx]);
-        int ngb_map_idx_y = MAP_GYWY(map_,sample_origin->pose.v[1]+(*Y)[nidx]);
+        int ngb_map_idx_x = MAP_GXWX(map_,next_origin_particle->pose.v[0]+(*X)[nidx]);
+        int ngb_map_idx_y = MAP_GYWY(map_,next_origin_particle->pose.v[1]+(*Y)[nidx]);
         //check if ngb_map_idx is valid
         if(MAP_VALID(map_,ngb_map_idx_x,ngb_map_idx_y)==false || (map_->cells[MAP_INDEX(map_,ngb_map_idx_x,ngb_map_idx_y)].occ_state != -1))
           continue;
@@ -153,8 +159,8 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
         free_ngb_indices.push_back(mapidx2freeidx_[ngb_map_idx_x][ngb_map_idx_y]);
         local_ngb_indices.push_back(nidx);
       }
-      VecMatrices& vec_prob_matrices = mat_prob_matrices[ANG2IDX(sample_origin->pose.v[2], ares_)];
-      double sample_origin_weight = 0.0;
+      VecMatrices& vec_prob_matrices = mat_prob_matrices[ANG2IDX(next_origin_particle->pose.v[2], ares_)];
+      double accumulative_weight = 0.0;
       for(int maidx = 0; maidx < ang_arr.size(); ++maidx)
       {
         Matrix& motion_prob_mat = vec_prob_matrices[maidx];
@@ -162,12 +168,12 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
         {
           int sample_ngb_idx = free_ngb_indices[idx]*size_a_ + maidx;
           int local_ngb_idx = local_ngb_indices[idx];
-          sample_origin_weight += set_b->samples[sample_ngb_idx].weight * motion_prob_mat[local_ngb_idx];
+          accumulative_weight += current_set->samples[sample_ngb_idx].weight * motion_prob_mat[local_ngb_idx];
         }
       }
-      sample_origin.weight = sample_origin_weight;
+      next_origin_particle->weight = accumulative_weight;
       std::lock_guard<std::mutex> lg(worker2_mutex);
-      total_weight += sample_origin_weight;
+      total_weight += accumulative_weight;
       ++sample_counter;
       if(sample_counter%percent_count == 0)
         ROS_DEBUG("progress: %f %d/%d",1.0*sample_counter/total_sample, sample_counter, total_sample);
@@ -386,6 +392,7 @@ MarkovNode::MarkovNode(): MCL(),
   boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
   ROS_DEBUG("MarkovNode::MarkovNode() is allocating laser_scan_filter_.");
   //maximize the buffer of laserReceive
+  private_nh_.param("motion_update", motion_update_flag_, true);
   private_nh_.param("laser_buffer_size", laser_buffer_size_, 500);
   private_nh_.param("angular_resolution", ares_, 5);//the unit is degree
   private_nh_.param("cloud_size", cloud_size_, 10000);
@@ -551,7 +558,11 @@ MarkovNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     //implement UpdataSensor in MarkovNode
     //double totalweight = odom_->UpdateSensor(grid_, (amcl::AMCLSensorData*)&odata);
     ROS_DEBUG("begin original odometry update. current_set:%d\n",grid_->current_set);
-    double totalweight = UpdateOdomO(&odata);
+    double totalweight;
+    if(motion_update_flag_)
+    {
+      totalweight = UpdateOdomO(&odata);
+    }
     ROS_DEBUG("finished original odometry update. It takes %f\n", (ros::Time::now() - beg_odom).toSec());
     //normalization of weight
     double w_avg = pf_normalize(grid_, totalweight);

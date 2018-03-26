@@ -39,6 +39,7 @@ class MarkovNode : public MCL<MarkovNode>
     int size_a_;
     double radius_;
     double epson_;
+    bool motion_update_flag_;
     int laser_buffer_size_;
     std::vector<int> active_sample_indices_;
     void initialMarkovGrid();
