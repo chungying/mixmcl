@@ -7,8 +7,8 @@ using namespace std;
 //matrix vertion using original motion model
 double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
 {
-  //transform those matrices wrt each origin_pose in current_set
-  //multipy all the element into the next_set grid
+  //transform those matrices wrt each origin_pose in previous_set with previous weight
+  //multipy and increment all the weights and assign to the origin_pose particle in current_set grid
   //sum up those resulting matrices
   //assign the summation to origin_pose in current_set
 
@@ -65,7 +65,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
       Y->push_back(side[j]);
     }
   }
-  MatMatrices mat_prob_matrices(size_a_, VecMatrices(size_a_, Matrix(X->size())));//for storing size_a_*size_a_ matrices
+  MatMatrices mat_prob_matrices(size_a_, VecMatrices(size_a_, Matrix()));//for storing size_a_*size_a_ matrices
   auto worker = [&ang_arr,X,Y,&delta_rot1,&delta_trans,&delta_rot2]//these are local variables within this function
   (aIter beg_oa, aIter end_oa, mIter beg_m, mIter end_m, amcl::AMCLOdom* odom)//these are parameters for worker and private members of this class
   {
@@ -77,14 +77,19 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
       {
         Matrix& matrix = (*mit)[maidx];
         matrix.reserve(X->size());
+        double matrix_sum = 0.0;
         for(int i = 0; i < X->size();++i)
         {
           //calculate Tr, R1, R2
           double tran_hat, rot1_hat, rot2_hat;
           odometry(0.0,0.0,(*particle_orientation_it),(*X)[i],(*Y)[i],ang_arr[maidx],rot1_hat,tran_hat,rot2_hat);
           //calculate P
-          matrix.push_back(motionModelO(odom, delta_rot1, delta_trans, delta_rot1, rot1_hat, tran_hat, rot2_hat));
+          double p = motionModelO(odom, delta_rot1, delta_trans, delta_rot1, rot1_hat, tran_hat, rot2_hat);
+          matrix.push_back(p);
+          matrix_sum += p;
+          assert(true);
         }
+        assert(matrix_sum!=0.0);
       }
     }
   };
@@ -108,13 +113,15 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   //update bel(xt-1,xt,action)
   //local variables
   pf_sample_set_t* current_set = grid_->sets + grid_->current_set;
-  pf_sample_set_t* next_set = grid_->sets + (grid_->current_set+1)%2;
+  pf_sample_set_t* previous_set = grid_->sets + (grid_->current_set+1)%2;
   double total_weight = 0;
   int sample_counter = 0;
+  int matrix_size = X->size();
   std::mutex worker2_mutex;
   /*common non-mutable input:
   current_set
-  next_set
+  previous_set
+  matrix_size
   X
   Y
   ang_arr
@@ -135,7 +142,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   vector<int>::iterator end
   */
   int percent_count;
-  auto worker2 = [&worker2_mutex, current_set, next_set, X, Y, &mat_prob_matrices, &ang_arr, &percent_count]
+  auto worker2 = [&worker2_mutex, current_set, previous_set, matrix_size, X, Y, &mat_prob_matrices, &ang_arr, &percent_count]
   (double& total_weight, int& sample_counter, int const total_sample, vector<int>::iterator active_sample_beg, vector<int>::iterator active_sample_end, int const size_a_, map_t const * map_, vector<vector<int> >& mapidx2freeidx_, int const ares_)
   {
     //for each active particle
@@ -143,23 +150,25 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
     {
       vector<int> free_ngb_indices, local_ngb_indices;
       //create neighbor index lists, one for free_space, one for local
-      free_ngb_indices.reserve(X->size());
-      local_ngb_indices.reserve(X->size());
-      pf_sample_t* next_origin_particle = next_set->samples + (*iter);
-      //find valid neighbors of next_origin_particle
-      for(int nidx = 0; nidx < X->size(); ++nidx)
+      free_ngb_indices.reserve(matrix_size);
+      local_ngb_indices.reserve(matrix_size);
+      pf_sample_t* current_origin_particle = current_set->samples + (*iter);
+      //find valid neighbors of origin_particle
+      for(int nidx = 0; nidx < matrix_size; ++nidx)
       {
         //get translated positions based on each pair in X and Y
-        int ngb_map_idx_x = MAP_GXWX(map_,next_origin_particle->pose.v[0]+(*X)[nidx]);
-        int ngb_map_idx_y = MAP_GYWY(map_,next_origin_particle->pose.v[1]+(*Y)[nidx]);
+        int ngb_map_idx_x = MAP_GXWX(map_,current_origin_particle->pose.v[0]+(*X)[nidx]);
+        int ngb_map_idx_y = MAP_GYWY(map_,current_origin_particle->pose.v[1]+(*Y)[nidx]);
         //check if ngb_map_idx is valid
         if(MAP_VALID(map_,ngb_map_idx_x,ngb_map_idx_y)==false || (map_->cells[MAP_INDEX(map_,ngb_map_idx_x,ngb_map_idx_y)].occ_state != -1))
           continue;
         //save indices of valid neighbors
         free_ngb_indices.push_back(mapidx2freeidx_[ngb_map_idx_x][ngb_map_idx_y]);
         local_ngb_indices.push_back(nidx);
+        assert(true);
       }
-      VecMatrices& vec_prob_matrices = mat_prob_matrices[ANG2IDX(next_origin_particle->pose.v[2], ares_)];
+      VecMatrices& vec_prob_matrices = mat_prob_matrices[ANG2IDX(current_origin_particle->pose.v[2], ares_)];
+      assert(free_ngb_indices.size()>0);
       double accumulative_weight = 0.0;
       for(int maidx = 0; maidx < ang_arr.size(); ++maidx)
       {
@@ -167,16 +176,22 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
         for(int idx = 0 ; idx < free_ngb_indices.size(); ++idx)
         {
           int sample_ngb_idx = free_ngb_indices[idx]*size_a_ + maidx;
+          pf_sample_t* previous_particle = previous_set->samples + sample_ngb_idx;
           int local_ngb_idx = local_ngb_indices[idx];
-          accumulative_weight += current_set->samples[sample_ngb_idx].weight * motion_prob_mat[local_ngb_idx];
+          assert(previous_particle->weight != 0.0);
+          accumulative_weight += previous_particle->weight * motion_prob_mat[local_ngb_idx];
+          assert(true);
         }
       }
-      next_origin_particle->weight = accumulative_weight;
+      assert(accumulative_weight != 0.0);
+      current_origin_particle->weight = accumulative_weight;
       std::lock_guard<std::mutex> lg(worker2_mutex);
       total_weight += accumulative_weight;
       ++sample_counter;
       if(sample_counter%percent_count == 0)
-        ROS_DEBUG("progress: %f %d/%d",1.0*sample_counter/total_sample, sample_counter, total_sample);
+      {
+        ROS_DEBUG("progress: %f %d/%d with accumulative weight %f, neighbor count: %ld, matrix size: %d, current total_weight: %f",1.0*sample_counter/total_sample, sample_counter, total_sample, accumulative_weight, free_ngb_indices.size(), matrix_size,total_weight);
+      }
     }
   };
 
@@ -199,6 +214,7 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
     thread.join();
   }
 
+  ROS_INFO("total weight: %f", total_weight);
   //delete X;
   //delete Y;
   return total_weight;
@@ -558,14 +574,15 @@ MarkovNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     //implement UpdataSensor in MarkovNode
     //double totalweight = odom_->UpdateSensor(grid_, (amcl::AMCLSensorData*)&odata);
     ROS_DEBUG("begin original odometry update. current_set:%d\n",grid_->current_set);
-    double totalweight;
+    double totalweight = 1.0;
     if(motion_update_flag_)
     {
       totalweight = UpdateOdomO(&odata);
     }
     ROS_DEBUG("finished original odometry update. It takes %f\n", (ros::Time::now() - beg_odom).toSec());
     //normalization of weight
-    double w_avg = pf_normalize(grid_, totalweight);
+    pf_sample_set_t* current_set = grid_->sets+grid_->current_set;
+    double w_avg = pf_normalize_set(current_set, totalweight);
     // Pose at last filter update
     //this->pf_odom_pose = pose;
   }
@@ -582,8 +599,8 @@ MarkovNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     ros::Time beg_laser = ros::Time::now();
     double total = lasers_[laser_index]->UpdateSensor(grid_, (amcl::AMCLSensorData*)&ldata);
     ROS_DEBUG("finished laser update. It takes %f\n", (ros::Time::now() - beg_laser).toSec());
-    double w_avg = pf_normalize(grid_, total);
     set = grid_->sets + grid_->current_set;
+    double w_avg = pf_normalize_set(set, total);
     int sample_count = set->sample_count;
     active_sample_indices_.clear();
     stamped_std_msgs::StampedFloat64MultiArray hist_msg;
