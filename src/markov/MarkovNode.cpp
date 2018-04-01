@@ -82,7 +82,9 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
         {
           //calculate Tr, R1, R2
           double tran_hat, rot1_hat, rot2_hat;
-          odometry(0.0,0.0,(*particle_orientation_it),(*X)[i],(*Y)[i],ang_arr[maidx],rot1_hat,tran_hat,rot2_hat);
+          //TODO check odometry
+          //odometry(0.0,0.0,(*particle_orientation_it),(*X)[i],(*Y)[i],ang_arr[maidx],rot1_hat,tran_hat,rot2_hat);
+          odometry((*X)[i],(*Y)[i],ang_arr[maidx],0.0,0.0,(*particle_orientation_it),rot1_hat,tran_hat,rot2_hat);
           //calculate P
           double p = motionModelO(odom, delta_rot1, delta_trans, delta_rot1, rot1_hat, tran_hat, rot2_hat);
           matrix.push_back(p);

@@ -23,13 +23,13 @@
     <param name="resample_interval" value="$(arg resample_interval)"/>
     <param name="laser_model_type" value="likelihood_field"/>
     <param name="max_particles" value="10000" />
-    <param name="update_min_d" value="0.5"/>
     <param name="motion_update" value="true"/>
-    <param name="angular_resolution" value="90" />
     <!--
     <param name="" value=""/>
     -->
     <!--
+    <param name="update_min_d" value="0.5"/>
+    <param name="angular_resolution" value="90" />
     <param name="resample_type" value="lowvariance"/>
     <param unless="$(arg global_localization)" name="initial_pose_x" value="$(arg init_x)"/>
     <param unless="$(arg global_localization)" name="initial_pose_y" value="$(arg init_y)"/>
