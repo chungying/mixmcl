@@ -367,33 +367,6 @@ void MarkovNode::initialMarkovGrid()
       ++sidx;
     }
   }
-  //for(int s = 0 ; s < 2 ; ++s)
-  //{
-  //  int sidx = 0;
-  //  for(std::pair<int,int> p:free_space_indices)
-  //  {
-  //    for(int a = 0 ; a < size_a_;++a)
-  //    {
-  //      sample = set->samples + sidx;
-  //      sample->pose.v[0] = MAP_WXGX(map_, p.first);
-  //      sample->pose.v[1] = MAP_WYGY(map_, p.second);
-  //      sample->pose.v[2] = IDX2ANG(a, ares_);
-  //      int free_space_idx = mapidx2freeidx_[MAP_GXWX(map_,sample->pose.v[0])][MAP_GYWY(map_,sample->pose.v[1])];
-  //      int ang_idx = ANG2IDX(sample->pose.v[2], ares_);
-  //      int sample_idx = free_space_idx * size_a_ + ang_idx;
-  //      assert(sample_idx == sidx);
-  //      sample->weight = 1.0 / max_particles_;
-  //      ++sidx;
-  //    }
-  //    set->kdtree = NULL;
-  //    set->cluster_count = 0;
-  //    set->cluster_max_count = max_particles_;
-  //    set->clusters = NULL;
-  //    set->mean = pf_vector_zero();
-  //    set->cov = pf_matrix_zero();
-  //    set->converged = 0; 
-  //  }
-  //}
 }
 
 MarkovNode::~MarkovNode(){
@@ -615,6 +588,8 @@ MarkovNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       hist_msg.array.data[idx] = set->samples[idx].weight;
       if(set->samples[idx].weight > epson_ )
         active_sample_indices_.push_back(idx);
+      else
+        set->samples[idx].weight = epson_;
     }
     histograms_pub_.publish(hist_msg);
     if(resample_count_<1)
