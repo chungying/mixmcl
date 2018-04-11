@@ -304,6 +304,8 @@ double MarkovNode::UpdateOdomO(amcl::AMCLOdomData* ndata)
   grainsize = (int)((double)active_sample_indices_.size()/(double)nb_threads);
   int total_sample = active_sample_indices_.size();
   percent_count = total_sample * 0.01;
+  if(percent_count <=0)
+    percent_count = 1;
   ROS_INFO("percent_count of total_sample: %d of %d", percent_count, total_sample);
   for(auto tit = std::begin(threads2); tit != std::end(threads2)-1 ; ++tit)
   {
