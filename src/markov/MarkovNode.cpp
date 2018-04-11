@@ -7,23 +7,6 @@ using namespace std;
 
 double MarkovNode::UpdateLaser(amcl::AMCLLaserData* ldata)
 {
-  /*
-  //TODO max_beams
-  if (this->max_beams < 2)
-    return 0.0;
-  double total = 0.0;
-  // Apply the laser sensor model
-  if(this->model_type == LASER_MODEL_BEAM)
-    total = pf_update_sensor(pf, (pf_sensor_model_fn_t) BeamModel, data);
-  else if(this->model_type == LASER_MODEL_LIKELIHOOD_FIELD)
-    total = pf_update_sensor(pf, (pf_sensor_model_fn_t) LikelihoodFieldModel, data);  
-  else if(this->model_type == LASER_MODEL_LIKELIHOOD_FIELD_PROB)
-    total = pf_update_sensor(pf, (pf_sensor_model_fn_t) LikelihoodFieldModelProb, data);  
-  else
-    total = pf_update_sensor(pf, (pf_sensor_model_fn_t) BeamModel, data);
-
-  return total;
-  */
   amcl::AMCLLaser *self;
   int i, j, step;
   double z, pz;
@@ -40,6 +23,11 @@ double MarkovNode::UpdateLaser(amcl::AMCLLaserData* ldata)
   total_weight = 0.0;
 
   // Compute the sample weights
+  //TODO parallelise this for loop
+/*
+  auto worker2 = [&worker2_mutex, current_set, previous_set, matrix_size, X, Y, &mat_prob_matrices, &ang_arr, &percent_count]
+  (double& total_weight, int& sample_counter, int const total_sample, vector<int>::iterator active_sample_beg, vector<int>::iterator active_sample_end, int const size_a_, map_t const * map_, vector<vector<int> >& mapidx2freeidx_, int const ares_)
+  {*/
   for (j = 0; j < set->sample_count; j++)
   {
     sample = set->samples + j;
@@ -103,12 +91,13 @@ double MarkovNode::UpdateLaser(amcl::AMCLLaserData* ldata)
       assert(pz >= 0.0);
       // here we have an ad-hoc weighting scheme for combining beam probs
       // works well, though...
-      //p += pz*pz*pz;
-      p *= pz;
+      p += pz*pz*pz;
+      //p *= pz;
       sample->logWeight += log(pz);
     }
 
-    sample->weight *= p;
+    //sample->weight *= p;
+    sample->weight *= exp(sample->logWeight);
     total_weight += sample->weight;
   }
 
@@ -501,7 +490,7 @@ MarkovNode::MarkovNode(): MCL(),
   private_nh_.param("odom_update_radius", radius_, 3.0);
   size_a_ = (int)(360.0/ares_);
   max_particles_ = free_space_indices.size() * size_a_;
-  epson_ = 1.0/max_particles_;
+  epson_ = 1.0/max_particles_/100;
   active_sample_indices_.reserve(max_particles_);
   pf_free( pf_ );
   pf_ = pf_alloc(min_particles_, cloud_size_,//for sampling from grid_
