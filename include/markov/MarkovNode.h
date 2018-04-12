@@ -48,8 +48,10 @@ class MarkovNode : public MCL<MarkovNode>
     void laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan);
     double UpdateOdom(amcl::AMCLOdomData* ndata);
     double UpdateLaser(amcl::AMCLLaserData* ldata);
+    double UpdateLaserParallel(amcl::AMCLLaserData* ldata);
     double motionModelS(const pf_sample_t* sample_a, const pf_sample_t* sample_b, const amcl::AMCLOdom* odom, const double delta_rot1, const double delta_trans, const double delta_rot2);
     double UpdateOdomO(amcl::AMCLOdomData* ndata);
+    static double UpdateParticle(amcl::AMCLLaser* self, amcl::AMCLLaserData* ldata, pf_sample_t* sample);
     static void odometry(const double oldx, const double oldy, const double olda, const double newx, const double newy, const double newa, double& delta_rot1_hat, double& delta_trans_hat, double& delta_rot2_hat);
     static double motionModelO(const amcl::AMCLOdom* odom, const double delta_rot1, const double delta_trans, const double delta_rot2, const double delta_rot1_hat, const double delta_trans_hat, const double delta_rot2_hat);
     void GLCB(){};
