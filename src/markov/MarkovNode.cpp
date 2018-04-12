@@ -795,11 +795,18 @@ MarkovNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     //TODO change this part
     //double total = lasers_[laser_index]->UpdateSensor(grid_, (amcl::AMCLSensorData*)&ldata);
     //double total = UpdateLaser(&ldata);
+    //update particle minimum weight before UpdateLaser
+    for(int idx=0; idx < sample_count;++idx)
+    {
+      if(set->samples[idx].weight < epson_ )
+        set->samples[idx].weight = epson_;
+    }
     double total = UpdateLaserParallel(&ldata);
     ROS_DEBUG("finished laser update. It takes %f\n", (ros::Time::now() - beg_laser).toSec());
     set = grid_->sets + grid_->current_set;
     double w_avg = pf_normalize_set(set, total);
     int sample_count = set->sample_count;
+    //update active_sample_indices_ and hist_msg
     active_sample_indices_.clear();
     stamped_std_msgs::StampedFloat64MultiArray hist_msg;
     hist_msg.header.frame_id = global_frame_id_;
