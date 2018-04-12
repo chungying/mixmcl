@@ -610,7 +610,7 @@ MarkovNode::MarkovNode(): MCL(),
   private_nh_.param("odom_update_radius", radius_, 3.0);
   size_a_ = (int)(360.0/ares_);
   max_particles_ = free_space_indices.size() * size_a_;
-  epson_ = 1.0/max_particles_/1024/1024;
+  epson_ = 1.0/max_particles_/1024;
   active_sample_indices_.reserve(max_particles_);
   pf_free( pf_ );
   pf_ = pf_alloc(min_particles_, cloud_size_,//for sampling from grid_
