@@ -6,6 +6,7 @@
   <arg name="resample_interval" default="1" />
   <arg name="launch-prefix" default="" />
   <arg name="record" default="true" />
+  <arg name="bagdir" default=""/>
   <arg name="bagfile" default="$(find mixmcl)/bags/ex3/2018-01-23-22-37-47-clean.bag"/>
   <arg name="map_yaml" default="$(find mixmcl)/maps/willowgarage/willowgarage-topleft.yaml" />
   <arg name="suicide"/>
@@ -22,6 +23,7 @@
     <rosparam command="load" file="$(find mixmcl)/yaml/amcl.yaml"/>
     <param name="resample_interval" value="$(arg resample_interval)"/>
     <param name="laser_model_type" value="likelihood_field"/>
+    <param name="laser_sigma_hit" value="1"/>
     <param name="max_particles" value="10000" />
     <param name="motion_update" value="true"/>
     <!--
@@ -38,7 +40,7 @@
     -->
   </node>
 
-  <node if="$(arg record)" name="rosbagrecorder" pkg="rosbag" type="record" output="screen" args="-o markov_mp$(arg max_particles)_ri$(arg resample_interval) /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /indices /positions /histograms"/>
+  <node if="$(arg record)" name="rosbagrecorder" pkg="rosbag" type="record" output="screen" args="-o $(arg bagdir)markov_mp$(arg max_particles)_ri$(arg resample_interval) /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /indices /positions /histograms"/>
   <!--MAP SERVER-->
   <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_yaml)" />
   <node if="$(arg suicide)" name="kill" pkg="mixmcl" type="kill.sh" args="/markov" output="screen"/>
