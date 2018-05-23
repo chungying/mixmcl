@@ -39,8 +39,8 @@
     <param name="laser_model_type" value="beam"/>
     <!--
     <param name="" value=""/>
-    -->
     <param name="update_min_d" value="0.5"/>
+    -->
   </node>
 
   <node if="$(arg record)" name="rosbagrecorder" pkg="rosbag" type="record" output="screen" args="-o mcmcl_mp$(arg max_particles)_ri$(arg resample_interval)_ita1e-2_gamma2 /tf /p3dx/laser/scan /p3dx/base_pose_ground_truth /mcl_pose /particlecloud /particlecloud2 /particlecloud3"/>
