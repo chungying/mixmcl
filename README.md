@@ -30,7 +30,7 @@ Most packages could be installed via rosdep or apt-get. Following two packages s
 ### Performance comparison
 #### Global Localisation Problem
 
-![Output sample](https://github.com/chungying/mixmcl/video/ex3/amcl_mp2000_ri1.mp4)
+![Output sample](https://raw.githubusercontent.com/chungying/mixmcl/master/video/ex3/amcl_mp2000_ri1.mp4)
 
 #### Kidnapped Robot Problem
 
