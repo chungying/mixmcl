@@ -8,23 +8,25 @@ AismclNode::AismclNode() :
   MCL(),
   first_reconfigureCB2_call_(false),
   kdt_(NULL),
-  dsrv2_(NULL)
+  dsrv2_(NULL),
+  demc_params_(NULL)
 {
   boost::recursive_mutex::scoped_lock l(configuration_mutex_);
   /*
     ita_
-    gamma_
-    loc_bw_
-    ori_bw_
+    demc_params_
     loch_
     orih_
     particlecloud2_pub_
     dsrv2_
   */
   private_nh_.param("dual_normalizer_ita", ita_, 0.0001);
-  private_nh_.param("demc_factor_gamma", gamma_, 0.95);
-  private_nh_.param("demc_loc_bandwidth", loc_bw_, 0.01);
-  private_nh_.param("demc_ori_bandwidth", ori_bw_, 0.1);
+  if(!demc_params_)
+    demc_params_.reset(new demc::demc_t);
+
+  private_nh_.param("demc_factor_gamma",  demc_params_->gamma, 0.95);
+  private_nh_.param("demc_loc_bandwidth", demc_params_->loc_bw, 0.01);
+  private_nh_.param("demc_ori_bandwidth", demc_params_->ori_bw, 0.1);
   private_nh_.param("dual_loc_bandwidth", loch_, 10.0);
   private_nh_.param("dual_ori_bandwidth", orih_, 0.4);
   private_nh_.param("version1", version1_, true);
@@ -69,7 +71,7 @@ AismclNode::AismclNode() :
   particlecloud2_pub_ = nh_.advertise<geometry_msgs::PoseArray>("particlecloud2", 2, true);
   particlecloud3_pub_ = nh_.advertise<geometry_msgs::PoseArray>("particlecloud3", 2, true);
 
-  dsrv2_ = new dynamic_reconfigure::Server<mixmcl::MCMCLConfig>(ros::NodeHandle("~/mcmcl_dc"));
+  dsrv2_ = new dynamic_reconfigure::Server<mixmcl::MCMCLConfig>(ros::NodeHandle("~/aismcl_dc"));
   dynamic_reconfigure::Server<mixmcl::MCMCLConfig>::CallbackType cb2 = boost::bind(&AismclNode::reconfigureCB2, this, _1, _2);
   dsrv2_->setCallback(cb2);
   if(!kdt_)
@@ -88,6 +90,9 @@ AismclNode::~AismclNode()
 void AismclNode::reconfigureCB2(mixmcl::MCMCLConfig& config, uint32_t level)
 {
   boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
+  //TODO Because Mixmcl, Mcmcl and this Aismcl all use the following codes, it is better to wrap the codes with a class.
+  //     Let the three class inherit the wrapping class
+  /***TODO to be wrapped***/
   if(!first_reconfigureCB2_call_)
   {
     ROS_INFO("first reconfigureCB2. Build density tree...");
@@ -98,25 +103,24 @@ void AismclNode::reconfigureCB2(mixmcl::MCMCLConfig& config, uint32_t level)
   }
   /*
     ita_
-    gamma_
-    loc_bw_ for demc
-    ori_bw_ for demc
+    demc_params_
     loch_ for kdt
     orih_ for kdt
   */
   ita_ = config.dual_normalizer_ita;
-  gamma_ = config.demc_factor_gamma;
-  loc_bw_ = config.demc_loc_bandwidth;
-  ori_bw_ = config.demc_ori_bandwidth;
+  demc_params_->gamma = config.demc_factor_gamma;
+  demc_params_->loc_bw = config.demc_loc_bandwidth;
+  demc_params_->ori_bw = config.demc_ori_bandwidth;
   loch_ = config.dual_loc_bandwidth;
   orih_ = config.dual_ori_bandwidth;
   ROS_INFO("AismclNode::reconfigureCB2(...)");
   ROS_INFO("dual_normalizer_ita: %lf", ita_);
-  ROS_INFO("demc_factor_gamma: %lf", gamma_);
-  ROS_INFO("demc_loc_bandwidth: %lf", loc_bw_);
-  ROS_INFO("demc_ori_bandwidth: %lf", ori_bw_);
+  ROS_INFO("demc_factor_gamma: %lf", demc_params_->gamma);
+  ROS_INFO("demc_loc_bandwidth: %lf", demc_params_->loc_bw);
+  ROS_INFO("demc_ori_bandwidth: %lf", demc_params_->ori_bw);
   ROS_INFO("dual_loc_bandwidth: %lf", loch_);
   ROS_INFO("dual_ori_bandwidth: %lf", orih_);
+  /***End to be wrapped***/
 }
 
 void AismclNode::RCCB()
@@ -268,7 +272,9 @@ AismclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     geometry_msgs::PoseArray rejected_cloud;
     rejected_cloud.header.stamp = laser_scan->header.stamp;
     rejected_cloud.header.frame_id = global_frame_id_;
-    double total = metropolisNEvaluation(accepted_cloud, rejected_cloud, ldata, ita_);
+    //TODO iteration_number_
+    //AIS parameters
+    double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
     MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
     double w_avg = pf_normalize(pf_, total);
     //TODO publish weighted particles to wpc_pub_
@@ -302,7 +308,7 @@ AismclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     geometry_msgs::PoseArray rejected_cloud;
     rejected_cloud.header.stamp = laser_scan->header.stamp;
     rejected_cloud.header.frame_id = global_frame_id_;
-    double total = metropolisNEvaluation(accepted_cloud, rejected_cloud, ldata, ita_);
+    double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
     if(version1_) 
     {
       MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
@@ -469,125 +475,3 @@ AismclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   }
 }
 
-//double McmclNode::metropolisNEvaluation(geometry_msgs::PoseArray& accepted_cloud, geometry_msgs::PoseArray& rejected_cloud, amcl::AMCLLaserData& ldata, double ita)
-//{
-//  /*
-//    return: double totalWeight
-//    input: AMCLLaserData ldata
-//    output: geometry_msgs::PoseArray accepted_cloud
-//    output: geometry_msgs::PoseArray rejected_cloud
-//    required: pf_t* pf_
-//    required: shared_ptr<KernelCollection> kdt_
-//    required: double ita_
-//  */
-//  //TODO iterations of Metropolis-Hasting Markov Chain algorithm
-//  int set_a_idx = pf_->current_set;
-//  int set_b_idx = (pf_->current_set + 1 ) % 2;
-//  pf_sample_set_t* set_a = pf_->sets + set_a_idx;
-//  pf_sample_set_t* set_b = pf_->sets + set_b_idx;
-//  demcProposal(set_a, set_b);
-//  assert(set_a->sample_count == set_b->sample_count);
-//  //update_measurement_model for both set_a and set_b
-//  pf_->current_set = set_a_idx;
-//  ldata.sensor->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
-//  pf_->current_set = set_b_idx;
-//  ldata.sensor->UpdateSensor(pf_, (amcl::AMCLSensorData*)&ldata);
-//  pf_->current_set = set_a_idx;
-//  //for each sample of set_b
-//  double total = 0;
-//  double logUniform, logAlpha;
-//  pf_sample_t* sample_a;
-//  pf_sample_t* sample_b;
-//  pf_vector_t vec_pose;
-//  for(int i = 0 ; i < set_b->sample_count ; ++i)
-//  {
-//    sample_a = set_a->samples + i;
-//    sample_b = set_b->samples + i;
-//    //calculate alpha
-//    logAlpha = sample_b->logWeight - sample_a->logWeight;
-//    if(logAlpha < 0)
-//      logUniform = std::log(MCL::rng_.uniform01());
-//    else
-//      logUniform = 0;
-//
-//    //if accepted 
-//    if(logUniform <= logAlpha)
-//    {
-//      //calculate weight for sample_b according to kernel density tree of previous poses
-//      vec_pose = sample_b->pose;
-//      nuklei::kernel::se3 se3_pose;
-//      MixmclNode::poseToSe3(vec_pose, se3_pose);
-//      //sample_a->weight = ita_ * kdt_->evaluationAt(se3_pose);
-//      sample_a->weight = ita * kdt_->evaluationAt(se3_pose);
-//      //move the sample from set_b to set_a
-//      sample_a->pose = sample_b->pose;
-//      //publish the accepted particle to particlecloud2
-//      geometry_msgs::Pose p;
-//      tf::poseTFToMsg(
-//        tf::Pose(
-//          tf::createQuaternionFromYaw(
-//            sample_a->pose.v[2]),
-//          tf::Vector3(
-//            sample_a->pose.v[0],
-//            sample_a->pose.v[1], 
-//            0)),
-//          p);
-//      accepted_cloud.poses.push_back(p);
-//    }
-//    //if rejected
-//    else
-//    {
-//      //publishe the rejected ones to particlecloud3 topic
-//      geometry_msgs::Pose p;
-//      tf::poseTFToMsg(
-//        tf::Pose(
-//          tf::createQuaternionFromYaw(
-//            sample_b->pose.v[2]),
-//          tf::Vector3(
-//            sample_b->pose.v[0],
-//            sample_b->pose.v[1], 
-//            0)),
-//          p);
-//      rejected_cloud.poses.push_back(p);
-//    }
-//    
-//    total += sample_a->weight;
-//  }
-//  return total;
-//}
-//
-//void McmclNode::demcProposal(pf_sample_set_t* pool, pf_sample_set_t* pop)
-//{
-//  //implement DEMC_proposal generating x' into set_b
-//  pop->sample_count = pool->sample_count;
-//  pf_sample_t* child;
-//  pf_sample_t* parent;
-//  pf_sample_t* rand1;
-//  pf_sample_t* rand2;
-//  int r1, r2;
-//  pf_vector_t diff;
-//  double tmp;
-//  for(int i = 0 ; i < pop->sample_count ; ++i)
-//  {
-//    child = pop->samples + i;
-//    parent = pool->samples + i;
-//    r1 = MCL::rng_.uniformInteger(0, pool->sample_count-1);
-//    r2 = MCL::rng_.uniformInteger(0, pool->sample_count-1);
-//    while(r2==r1)
-//      r2 = MCL::rng_.uniformInteger(0, pool->sample_count-1);
-//    rand1 = pool->samples + r1;
-//    rand2 = pool->samples + r2;
-//    diff = pf_vector_sub(rand1->pose, rand2->pose);
-//    diff.v[0] = gamma_ * diff.v[0] + MCL::rng_.gaussian(0, loc_bw_);
-//    diff.v[1] = gamma_ * diff.v[1] + MCL::rng_.gaussian(0, loc_bw_);
-//    diff.v[2] = gamma_ * angle_diff( (rand1->pose.v[2]), (rand2->pose.v[2]) ) + MCL::rng_.gaussian(0, ori_bw_);
-//    child->pose = pf_vector_add(parent->pose, diff);
-//    if( child->pose.v[0] > mapx_.second || child->pose.v[0] < mapx_.first)
-//      child->pose.v[0] = fmod( fmod( child->pose.v[0] - mapx_.first , map_rng_x_) + map_rng_x_, map_rng_x_) + mapx_.first;
-//    if( child->pose.v[1] > mapy_.second || child->pose.v[1] < mapy_.first)
-//      child->pose.v[1] = fmod( fmod( child->pose.v[1] - mapy_.first , map_rng_y_) + map_rng_y_, map_rng_y_) + mapy_.first;
-//    child->pose.v[2] = normalize(child->pose.v[2]);
-//    //set all weights to be one
-//    child->weight = 1.0;
-//  }
-//}

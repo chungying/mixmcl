@@ -31,6 +31,7 @@ class MixmclNode : public MCL<MixmclNode>
     virtual void RCCB();
 
     //Mixture MCL
+    //TODO wrap Mixture-MCL paprameters together as a struct or class
     double mixing_rate_, ita_;
     int fxres_, fyres_, fdres_;
     std::string sample_param_filename_;

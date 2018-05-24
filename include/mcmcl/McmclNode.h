@@ -7,19 +7,20 @@
 #include <nuklei/KernelCollection.h>
 #include "demc.h"
 
-static inline double gausspdf(double a, double b)
-{
-  double a2 = a*a;
-  double b2 = b*b;
-  return exp(a2/(b2*(-2)))/(b*sqrt(2*M_PI));
-}
+//static inline double gausspdf(double a, double b)
+//{
+//  double a2 = a*a;
+//  double b2 = b*b;
+//  return exp(a2/(b2*(-2)))/(b*sqrt(2*M_PI));
+//}
 
-typedef struct
-{
-  double delta_rot1;
-  double delta_trans;
-  double delta_rot2;
-} odom_model_t;
+//TODO inherit amcl::odom_model_t and expand it with following parameters
+//typedef struct
+//{
+//  double delta_rot1;
+//  double delta_trans;
+//  double delta_rot2;
+//} odom_model_t;
 
 class McmclNode : public MCL<McmclNode> 
 {
@@ -44,11 +45,10 @@ class McmclNode : public MCL<McmclNode>
     void RCCB();
 
     //pf_sample_ptr_vector_t set_c;  
+    //TODO mixmcl parameters 
     double ita_;
-    boost::shared_ptr<demc::demc_t> demc_params_;
-    double gamma_;
-    double loc_bw_, ori_bw_;
     double loch_, orih_;
+    boost::shared_ptr<demc::demc_t> demc_params_;
     boost::shared_ptr<nuklei::KernelCollection> kdt_;
     ros::Publisher particlecloud2_pub_;//for accepted cloud
     ros::Publisher particlecloud3_pub_;//for rejected cloud
@@ -61,9 +61,6 @@ class McmclNode : public MCL<McmclNode>
     void printInfo()
     {
       ROS_INFO("ita: %f", ita_);
-      ROS_INFO("gamma: %f", gamma_);
-      ROS_INFO("loc_bw: %f", loc_bw_);
-      ROS_INFO("ori_bw: %f", ori_bw_);
       ROS_INFO("loch: %f", loch_);
       ROS_INFO("orih: %f", orih_);
     };

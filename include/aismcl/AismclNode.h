@@ -1,9 +1,26 @@
-#ifndef AISMCLNODE_H
-#define AISMCLNODE_H
+#ifndef MCMCLNODE_H
+#define MCMCLNODE_H
 #include "mcl/MCL.h"
+#include "mixmcl/MixmclNode.h"
 #include "mixmcl/MCMCLConfig.h"
 //Allows MCL to build density trees for particle evaluation
 #include <nuklei/KernelCollection.h>
+#include "demc.h"
+
+enum ais_density_t 
+{
+  Uniform = 0,
+  Logarithm
+};
+
+typedef struct 
+{
+  //the number of MCMC iteration
+  int iter_num;
+  //the type of bridging densities 
+  ais_density_t den_type;
+
+} ais_t;
 
 class AismclNode : public MCL<AismclNode> 
 {
@@ -26,21 +43,14 @@ class AismclNode : public MCL<AismclNode>
       MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
     };
     void RCCB();
-   
-    //TODO make these two function static
-    double metropolisNEvaluation(geometry_msgs::PoseArray& accepted_cloud, geometry_msgs::PoseArray& rejected_cloud, amcl::AMCLLaserData& ldata, double ita);
-    void demcProposal(pf_sample_set_t* gene_pool, pf_sample_set_t* population);
 
     //pf_sample_ptr_vector_t set_c;  
-    //TODO MCMC sampler struct
+    //TODO mixmcl parameters 
     double ita_;
-    double gamma_;
-    double loc_bw_, ori_bw_;
     double loch_, orih_;
-
-    //TODO nuklei struct
+    boost::shared_ptr<demc::demc_t> demc_params_;
+    boost::shared_ptr<ais_t> ais_params_;
     boost::shared_ptr<nuklei::KernelCollection> kdt_;
-
     ros::Publisher particlecloud2_pub_;//for accepted cloud
     ros::Publisher particlecloud3_pub_;//for rejected cloud
     bool first_reconfigureCB2_call_;
@@ -52,12 +62,9 @@ class AismclNode : public MCL<AismclNode>
     void printInfo()
     {
       ROS_INFO("ita: %f", ita_);
-      ROS_INFO("gamma: %f", gamma_);
-      ROS_INFO("loc_bw: %f", loc_bw_);
-      ROS_INFO("ori_bw: %f", ori_bw_);
       ROS_INFO("loch: %f", loch_);
       ROS_INFO("orih: %f", orih_);
     };
 };
 
-#endif//AISMCLNODE_H
+#endif//MCMCLNODE_H
