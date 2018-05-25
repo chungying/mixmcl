@@ -30,7 +30,7 @@ Most packages could be installed via rosdep or apt-get. Following two packages s
 ### Performance comparison
 #### Global Localisation Problem
 
-![Output sample](https://j.gifs.com/APYGyj.gif)
+[![Output sample](https://j.gifs.com/APYGyj.gif)](https://youtu.be/dVkXle5kVsw)
 
 #### Kidnapped Robot Problem
 
