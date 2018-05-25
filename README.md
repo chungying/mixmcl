@@ -32,6 +32,7 @@ Most packages could be installed via rosdep or apt-get. Following two packages s
 Some results for AMCL, MCL, MIXMCL, and MCMCL (the proposed method) are shown here.
 
 mp: maximum particle number
+
 ri: resample intervel
 
 [![Output sample](https://j.gifs.com/APYGyj.gif)](https://youtu.be/dVkXle5kVsw)
