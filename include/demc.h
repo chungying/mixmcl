@@ -189,8 +189,10 @@ double metropolisRejectAndCalculateWeight(
  * @param[in] iteration_number The number of iteration of MH method
  * @param[in] kdt The object for Kernel Density Estimation, if NULL, kdt is uniform distribution
  * @param[in] demc The object for DEMC algorithm of MH method
- * @param[in,out] pf The object for particle sets
- * @return 
+ * @param[in,out] pf The object for particle sets, where current_set is input, and another set is output.
+ * TODO separate pf into two set
+ * TODO implement laserUpdate with pf_set input
+ * @return[out] Total weight of output particles
  */
 double annealedImportanceSampling(
   amcl::AMCLLaserData& ldata, 
@@ -216,7 +218,7 @@ double annealedImportanceSampling(
   const int set_b_idx = (pf->current_set + 1 ) % 2;
   pf_sample_set_t* set_a = pf->sets + set_a_idx;
   pf_sample_set_t* set_b = pf->sets + set_b_idx;
-  set_b->sample_count = set_a->sample_count
+  set_b->sample_count = set_a->sample_count;
   std::vector<double> sum_log_bridging_weight(set_a->sample_count);
   std::vector<double> pre_log_bridging_weight(set_a->sample_count);
   std::vector<double> set_a_log_density_prob(set_a->sample_count);
@@ -225,7 +227,10 @@ double annealedImportanceSampling(
   //update measurement model for set_a
   //note that set_a is resampled particle set with equal weights
   pf->current_set = set_a_idx;
-  ldata.sensor->UpdateSensor(pf, (amcl::AMCLSensorData*)&ldata);
+  //TODO assert the following two lines
+  double total_weight_pf = ldata.sensor->UpdateSensor(pf, (amcl::AMCLSensorData*)&ldata);
+  double total_weight_set = ldata.sensor->UpdateSensor(set_a, (amcl::AMCLSensorData*)&ldata);
+  assert(total_weight_pf==total_weight_set);
   for(int i = 0 ; i < set_a->sample_count ; ++i)
   {
     sample_a = set_a->samples + i;
@@ -250,7 +255,9 @@ double annealedImportanceSampling(
     demc::proposal(set_a, demc_params, mapx, mapy, mapx_range, mapy_range, rng, set_b);
     //update measurement model for set_b
     pf->current_set = set_b_idx;
+    //TODO assert the following two lines
     ldata.sensor->UpdateSensor(pf, (amcl::AMCLSensorData*)&ldata);
+    ldata.sensor->UpdateSensor(set_b, (amcl::AMCLSensorData*)&ldata);
     for(int i = 0; i < set_b->sample_count; ++i)
     {
       sample_a = set_a->samples + i;
@@ -269,7 +276,7 @@ double annealedImportanceSampling(
       //set_b_log_bridging_weight[i] = sample_b->logWeight;//TODO average the summation / (1.0 + iter_no) 
       //update acceptance probability of sample_a and sample_b
       //sample_b is numerator sample_a is denominator
-      log_alpha = set_b_log_density_prob[i] - set_a_log_density_prob[i]
+      log_alpha = set_b_log_density_prob[i] - set_a_log_density_prob[i];
       if(log_alpha < 0)
         log_uniform = std::log(rng.uniform01());
       else

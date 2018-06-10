@@ -1,3 +1,10 @@
+/**
+ * @file AismclNode.h
+ * @brief AismclNode implements Monte Carlo Localization algorithm with combination of Annealed Importance Sampling
+ * @author chungying
+ * @version 0.0.0
+ * @date 2018-05-25
+ */
 #ifndef MCMCLNODE_H
 #define MCMCLNODE_H
 #include "mcl/MCL.h"
@@ -7,10 +14,13 @@
 #include <nuklei/KernelCollection.h>
 #include "demc.h"
 
-enum ais_density_t 
+namespace ais
 {
-  Uniform = 0,
-  Logarithm
+
+enum density_t
+{
+  uniform = 0,
+  logarithm
 };
 
 typedef struct 
@@ -18,9 +28,12 @@ typedef struct
   //the number of MCMC iteration
   int iter_num;
   //the type of bridging densities 
-  ais_density_t den_type;
+  density_t den_type;
 
 } ais_t;
+
+}
+
 
 class AismclNode : public MCL<AismclNode> 
 {
@@ -45,11 +58,11 @@ class AismclNode : public MCL<AismclNode>
     void RCCB();
 
     //pf_sample_ptr_vector_t set_c;  
-    //TODO mixmcl parameters 
+    //TODO wrapping mixmcl parameters 
     double ita_;
     double loch_, orih_;
     boost::shared_ptr<demc::demc_t> demc_params_;
-    boost::shared_ptr<ais_t> ais_params_;
+    boost::shared_ptr<ais::ais_t> ais_params_;
     boost::shared_ptr<nuklei::KernelCollection> kdt_;
     ros::Publisher particlecloud2_pub_;//for accepted cloud
     ros::Publisher particlecloud3_pub_;//for rejected cloud

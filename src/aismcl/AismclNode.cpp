@@ -9,7 +9,8 @@ AismclNode::AismclNode() :
   first_reconfigureCB2_call_(false),
   kdt_(NULL),
   dsrv2_(NULL),
-  demc_params_(NULL)
+  demc_params_(NULL),
+  ais_params_(NULL)
 {
   boost::recursive_mutex::scoped_lock l(configuration_mutex_);
   /*
@@ -23,6 +24,25 @@ AismclNode::AismclNode() :
   private_nh_.param("dual_normalizer_ita", ita_, 0.0001);
   if(!demc_params_)
     demc_params_.reset(new demc::demc_t);
+  if(!ais_params_)
+    ais_params_.reset(new ais_t);
+  private_nh_.param("ais_iteration_number", ais_params_->iter_num, 1);
+  std::string tmp_ais_type;
+  private_nh_.param("ais_type", tmp_ais_type, std::string("uniform"));
+  if(tmp_ais_type == "uniform")
+  {
+    ais_params_->den_type = ais::density_t::uniform;
+  }
+  else if(tmp_ais_type == "logrithm")
+  {
+    //TODO after implementing each logrithm type, uncomment the following line
+    //ais_params_->den_type = ais::density_t::logrithm;
+    ais_params_->den_type = ais::density_t::uniform;
+  }
+  else
+  {
+    ais_params_->den_type = ais::density_t::uniform;
+  }
 
   private_nh_.param("demc_factor_gamma",  demc_params_->gamma, 0.95);
   private_nh_.param("demc_loc_bandwidth", demc_params_->loc_bw, 0.01);
@@ -90,9 +110,9 @@ AismclNode::~AismclNode()
 void AismclNode::reconfigureCB2(mixmcl::MCMCLConfig& config, uint32_t level)
 {
   boost::recursive_mutex::scoped_lock cfl(configuration_mutex_);
-  //TODO Because Mixmcl, Mcmcl and this Aismcl all use the following codes, it is better to wrap the codes with a class.
+  //TODO Because Mixmcl, Mcmcl and this Aismcl all use the following codes, it is better to reuse the code.
   //     Let the three class inherit the wrapping class
-  /***TODO to be wrapped***/
+  /***TODO to be wrapped for reusing***/
   if(!first_reconfigureCB2_call_)
   {
     ROS_INFO("first reconfigureCB2. Build density tree...");
@@ -272,8 +292,7 @@ AismclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     geometry_msgs::PoseArray rejected_cloud;
     rejected_cloud.header.stamp = laser_scan->header.stamp;
     rejected_cloud.header.frame_id = global_frame_id_;
-    //TODO iteration_number_
-    //AIS parameters
+    //TODO iterate MCMC and update weight by using AIS
     double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
     MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
     double w_avg = pf_normalize(pf_, total);
