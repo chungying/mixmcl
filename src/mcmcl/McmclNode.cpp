@@ -272,7 +272,14 @@ McmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     geometry_msgs::PoseArray rejected_cloud;
     rejected_cloud.header.stamp = laser_scan->header.stamp;
     rejected_cloud.header.frame_id = global_frame_id_;
-    double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
+    //TODO 
+    //double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
+    pf_sample_set_t* old_chains = pf_->sets + pf_->current_set;
+    pf_sample_set_t* new_chains = pf_->sets + (pf_->current_set + 1 ) % 2;
+    //update current set index
+    pf_->current_set = (pf_->current_set + 1 ) % 2;
+    double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, old_chains, new_chains, accepted_cloud, rejected_cloud);
+
     MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
     double w_avg = pf_normalize(pf_, total);
     //TODO publish weighted particles to wpc_pub_
@@ -306,7 +313,13 @@ McmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     geometry_msgs::PoseArray rejected_cloud;
     rejected_cloud.header.stamp = laser_scan->header.stamp;
     rejected_cloud.header.frame_id = global_frame_id_;
-    double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
+    //TODO 
+    //double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
+    pf_sample_set_t* old_chains = pf_->sets + pf_->current_set;
+    pf_sample_set_t* new_chains = pf_->sets + (pf_->current_set + 1 ) % 2;
+    //update current set index
+    pf_->current_set = (pf_->current_set + 1 ) % 2;
+    double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, old_chains, new_chains, accepted_cloud, rejected_cloud);
     if(version1_) 
     {
       MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);

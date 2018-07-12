@@ -23,13 +23,13 @@ typedef struct
  * @brief This function implements MCMC jump of DEMC algorithm.
  *
  * @param pool This gene pool of DEMC is the particles distributed over p(x_t|u_t,x_{t-1})
- * @param params This parameters of DEMC algorithm
- * @param mapx The pair of minimum and maximum values in X-axis of map coordinate in meters
- * @param mapy The pair of minimum and maximum values in Y-axis of map coordinate in meters
- * @param mapx_range The distance between the minimum and maximum in X-axis in meters
- * @param mapy_range The distance between the minimum and maximum in Y-axis in meters
- * @param rng The generator of random values
- * @param pop The output population of DEMC algorithm
+ * @param[in] params This parameters of DEMC algorithm
+ * @param[in] mapx The pair of minimum and maximum values in X-axis of map coordinate in meters
+ * @param[in] mapy The pair of minimum and maximum values in Y-axis of map coordinate in meters
+ * @param[in] mapx_range The distance between the minimum and maximum in X-axis in meters
+ * @param[in] mapy_range The distance between the minimum and maximum in Y-axis in meters
+ * @param[in] rng The generator of random values
+ * @param[out] pop The output population of DEMC algorithm
  */
 void proposal(
   pf_sample_set_t* pool, 
@@ -88,7 +88,8 @@ void proposal(
  * @param[in] mapx_range
  * @param[in] mapy_range
  * @param[in] rng Random number generator
- * @param[in, out] pf The pointer having particle sets
+ * @param[in] old_chains Markov chains at current iteration
+ * @param[out] new_chains Markov chains at next iteration
  * @param[out] accepted_cloud Pose array for publishing to topics
  * @param[out] rejected_cloud Pose array for publishing to topics
  * @return Total weight of all evaluated particles
@@ -103,35 +104,31 @@ double metropolisRejectAndCalculateWeight(
   double mapx_range,
   double mapy_range,
   random_numbers::RandomNumberGenerator rng,
-  pf_t* pf,
+  pf_sample_set_t* old_chains, //source particles with weight
+  pf_sample_set_t* new_chains, //sampled particles with weight
   geometry_msgs::PoseArray& accepted_cloud,
   geometry_msgs::PoseArray& rejected_cloud)
 {
-  const int set_a_idx = pf->current_set;
-  const int set_b_idx = (pf->current_set + 1 ) % 2;
-  pf_sample_set_t* set_a = pf->sets + set_a_idx;
-  pf_sample_set_t* set_b = pf->sets + set_b_idx;
-  demc::proposal(set_a, demc_params, mapx, mapy, mapx_range, mapy_range, rng, set_b);
-  //update_measurement_model for both set_a and set_b
-  //note that set_a is resampled particle set with equal weights
-  pf->current_set = set_a_idx;
-  ldata.sensor->UpdateSensor(pf, (amcl::AMCLSensorData*)&ldata);
-  pf->current_set = set_b_idx;
-  ldata.sensor->UpdateSensor(pf, (amcl::AMCLSensorData*)&ldata);
-  pf->current_set = set_a_idx;
-  //for each sample of set_b
+  //propose states of new chains
+  demc::proposal(old_chains, demc_params, mapx, mapy, mapx_range, mapy_range, rng, new_chains);
+  //update_measurement_model for both old_chains and new_chains
+  //note that old_chains is resampled particle set with equal weights
+  ((amcl::AMCLLaser*)ldata.sensor)->UpdateSensorWithSet(old_chains, &ldata);
+  ((amcl::AMCLLaser*)ldata.sensor)->UpdateSensorWithSet(new_chains, &ldata);
+  
+  //for each sample of new_chains, apply acceptance and rejection scheme
   double total = 0;
   double log_uniform, log_alpha;
-  pf_sample_t* sample_a;
-  pf_sample_t* sample_b;
+  pf_sample_t* old_state;
+  pf_sample_t* new_state;
   pf_vector_t vec_pose;
   nuklei::kernel::se3 se3_pose;
-  for(int i = 0 ; i < set_b->sample_count ; ++i)
+  for(int i = 0 ; i < new_chains->sample_count ; ++i)
   {
-    sample_a = set_a->samples + i;
-    sample_b = set_b->samples + i;
+    old_state = old_chains->samples + i;
+    new_state = new_chains->samples + i;
     //calculate alpha
-    log_alpha = sample_b->logWeight - sample_a->logWeight;
+    log_alpha = new_state->logWeight - old_state->logWeight;
     if(log_alpha < 0)
       log_uniform = std::log(rng.uniform01());
     else
@@ -140,22 +137,23 @@ double metropolisRejectAndCalculateWeight(
     //if accepted 
     if(log_uniform <= log_alpha)
     {
-      //calculate weight for sample_b according to kernel density tree of previous poses
-      //move the sample from set_b to set_a
-      sample_a->pose = sample_b->pose;
-      //vec_pose = sample_b->pose;
+      //calculate weight for new_state according to kernel density tree of previous poses
+      //move the sample from new_chains to old_chains
+      old_state->pose = new_state->pose;
+      //vec_pose = new_state->pose;
       //nuklei::kernel::se3 se3_pose;
-      MixmclNode::poseToSe3(sample_a->pose, se3_pose);
-      sample_a->weight = ita * (kdt->evaluationAt(se3_pose));
+      MixmclNode::poseToSe3(old_state->pose, se3_pose);
+      old_state->weight = ita * (kdt->evaluationAt(se3_pose));
+
       //publish the accepted particle to particlecloud2
       geometry_msgs::Pose p;
       tf::poseTFToMsg(
         tf::Pose(
           tf::createQuaternionFromYaw(
-            sample_a->pose.v[2]),
+            old_state->pose.v[2]),
           tf::Vector3(
-            sample_a->pose.v[0],
-            sample_a->pose.v[1], 
+            old_state->pose.v[0],
+            old_state->pose.v[1], 
             0)),
           p);
       accepted_cloud.poses.push_back(p);
@@ -168,138 +166,17 @@ double metropolisRejectAndCalculateWeight(
       tf::poseTFToMsg(
         tf::Pose(
           tf::createQuaternionFromYaw(
-            sample_b->pose.v[2]),
+            new_state->pose.v[2]),
           tf::Vector3(
-            sample_b->pose.v[0],
-            sample_b->pose.v[1], 
+            new_state->pose.v[0],
+            new_state->pose.v[1], 
             0)),
           p);
       rejected_cloud.poses.push_back(p);
     }
     
-    total += sample_a->weight;
+    total += old_state->weight;
   }
-  return total;
-}
-
-/**
- * @brief This function performs Annealed Importance Sampling incorporating with Metropolis-Hastings sampling methods.
- *
- * @param[in] ldata The object for measurement model
- * @param[in] iteration_number The number of iteration of MH method
- * @param[in] kdt The object for Kernel Density Estimation, if NULL, kdt is uniform distribution
- * @param[in] demc The object for DEMC algorithm of MH method
- * @param[in,out] pf The object for particle sets, where current_set is input, and another set is output.
- * TODO separate pf into two set
- * TODO implement laserUpdate with pf_set input
- * @return[out] Total weight of output particles
- */
-double annealedImportanceSampling(
-  amcl::AMCLLaserData& ldata, 
-  int iter_no,
-  nuklei::KernelCollection* kdt,
-  demc_t* demc_params,
-  std::pair<double, double> mapx,
-  std::pair<double, double> mapy,
-  double mapx_range,
-  double mapy_range,
-  random_numbers::RandomNumberGenerator rng,
-  pf_t* pf)//,
-  //geometry_msgs::PoseArray& accepted_cloud,
-  //geometry_msgs::PoseArray& rejected_cloud)
-{
-  double total = 0.0;
-  double log_uniform, log_alpha;
-  pf_sample_t* sample_a;
-  pf_sample_t* sample_b;
-  pf_vector_t vec_pose;
-  nuklei::kernel::se3 se3_pose;
-  const int set_a_idx = pf->current_set;
-  const int set_b_idx = (pf->current_set + 1 ) % 2;
-  pf_sample_set_t* set_a = pf->sets + set_a_idx;
-  pf_sample_set_t* set_b = pf->sets + set_b_idx;
-  set_b->sample_count = set_a->sample_count;
-  std::vector<double> sum_log_bridging_weight(set_a->sample_count);
-  std::vector<double> pre_log_bridging_weight(set_a->sample_count);
-  std::vector<double> set_a_log_density_prob(set_a->sample_count);
-  std::vector<double> set_b_log_density_prob(set_b->sample_count);
-  
-  //update measurement model for set_a
-  //note that set_a is resampled particle set with equal weights
-  pf->current_set = set_a_idx;
-  //TODO assert the following two lines
-  double total_weight_pf = ldata.sensor->UpdateSensor(pf, (amcl::AMCLSensorData*)&ldata);
-  double total_weight_set = ldata.sensor->UpdateSensor(set_a, (amcl::AMCLSensorData*)&ldata);
-  assert(total_weight_pf==total_weight_set);
-  for(int i = 0 ; i < set_a->sample_count ; ++i)
-  {
-    sample_a = set_a->samples + i;
-    //update density probability of pi for set_a
-    if(kdt == NULL)
-    {
-      set_a_log_density_prob[i] = sample_a->logWeight;
-    }
-    else
-    {
-      MixmclNode::poseToSe3(sample_a->pose, se3_pose);
-      set_a_log_density_prob[i] = sample_a->logWeight + std::log(kdt->evaluationAt(se3_pose));
-    }
-    //TODO
-    //update log_bridging_weight for set_a
-    sum_log_bridging_weight[i] = sample_a->logWeight;//TODO average the summation  / (1.0 + iter_no)
-  }
-
-  for(int m = 1; m <= iter_no; ++m)
-  {
-    //apply MCMC moves and store Markov chains in set_b
-    demc::proposal(set_a, demc_params, mapx, mapy, mapx_range, mapy_range, rng, set_b);
-    //update measurement model for set_b
-    pf->current_set = set_b_idx;
-    //TODO assert the following two lines
-    ldata.sensor->UpdateSensor(pf, (amcl::AMCLSensorData*)&ldata);
-    ldata.sensor->UpdateSensor(set_b, (amcl::AMCLSensorData*)&ldata);
-    for(int i = 0; i < set_b->sample_count; ++i)
-    {
-      sample_a = set_a->samples + i;
-      sample_b = set_b->samples + i;
-      //update density probability of pi for set_b
-      if(kdt == NULL)
-      {
-        set_b_log_density_prob[i] = sample_b->logWeight;
-      }
-      else
-      {
-        MixmclNode::poseToSe3(sample_b->pose, se3_pose);
-        set_b_log_density_prob[i] = sample_b->logWeight + std::log(kdt->evaluationAt(se3_pose));
-      }
-      //update log_bridging_weight for sample_b
-      //set_b_log_bridging_weight[i] = sample_b->logWeight;//TODO average the summation / (1.0 + iter_no) 
-      //update acceptance probability of sample_a and sample_b
-      //sample_b is numerator sample_a is denominator
-      log_alpha = set_b_log_density_prob[i] - set_a_log_density_prob[i];
-      if(log_alpha < 0)
-        log_uniform = std::log(rng.uniform01());
-      else
-        log_uniform = 0;
-
-      //if accept sample_b
-      if(log_uniform <= log_alpha)
-      {
-        //copy sample_b to sample_a
-        sample_a->pose = sample_b->pose;
-        sample_a->weight = sample_b->weight;
-        sample_a->logWeight = sample_b->logWeight;
-        set_a_log_density_prob[i] = set_b_log_density_prob[i];
-      }
-      else 
-      {
-        //update sample_a->weight
-        ;
-      }
-    }
-  }
-  //TODO normalization and accumulate weight
-  
   return total;
 }
 

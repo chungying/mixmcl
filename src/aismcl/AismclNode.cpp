@@ -25,7 +25,7 @@ AismclNode::AismclNode() :
   if(!demc_params_)
     demc_params_.reset(new demc::demc_t);
   if(!ais_params_)
-    ais_params_.reset(new ais_t);
+    ais_params_.reset(new ais::ais_t);
   private_nh_.param("ais_iteration_number", ais_params_->iter_num, 1);
   std::string tmp_ais_type;
   private_nh_.param("ais_type", tmp_ais_type, std::string("uniform"));
@@ -49,8 +49,6 @@ AismclNode::AismclNode() :
   private_nh_.param("demc_ori_bandwidth", demc_params_->ori_bw, 0.1);
   private_nh_.param("dual_loc_bandwidth", loch_, 10.0);
   private_nh_.param("dual_ori_bandwidth", orih_, 0.4);
-  private_nh_.param("version1", version1_, true);
-  private_nh_.param("static_update", static_update_, true);
   std::string tmp_resample_type;
   private_nh_.param("resample_type", tmp_resample_type, std::string("kld"));
   ROS_INFO("Resample type is %s", tmp_resample_type.c_str());
@@ -283,21 +281,46 @@ AismclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   amcl::AMCLLaserData ldata;
   MCL::createLaserData(laser_index, ldata, laser_scan);
 
+  geometry_msgs::PoseArray accepted_cloud;
+  accepted_cloud.header.stamp = laser_scan->header.stamp;
+  accepted_cloud.header.frame_id = global_frame_id_;
+  geometry_msgs::PoseArray rejected_cloud;
+  rejected_cloud.header.stamp = laser_scan->header.stamp;
+  rejected_cloud.header.frame_id = global_frame_id_;
   bool resampled = false;
   if(lasers_update_[laser_index])
   {
-    geometry_msgs::PoseArray accepted_cloud;
-    accepted_cloud.header.stamp = laser_scan->header.stamp;
-    accepted_cloud.header.frame_id = global_frame_id_;
-    geometry_msgs::PoseArray rejected_cloud;
-    rejected_cloud.header.stamp = laser_scan->header.stamp;
-    rejected_cloud.header.frame_id = global_frame_id_;
-    //TODO iterate MCMC and update weight by using AIS
-    double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
     MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
-    double w_avg = pf_normalize(pf_, total);
-    //TODO publish weighted particles to wpc_pub_
-    //MCL::publishWeightedParticleCloud(wpc_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
+    double total = AnnealedImportanceSampling(ldata, ais_params_.get(), kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_);
+    //TODO monitor w_avg
+    //TODO monitor max_element and min_element
+    //double w_avg = pf_normalize(pf_, total);
+    pf_sample_set_t* set = pf_->sets + pf_->current_set;
+    int min_idx=0, max_idx=0;
+    double mini=set->samples[0].weight, maxi=set->samples[0].weight;
+    double w_avg=0.0;
+    for (int i = 0; i < set->sample_count; i++)
+    {
+      if(mini > set->samples[i].weight)
+      {
+        mini = set->samples[i].weight;
+        min_idx = i;
+      }
+      if(maxi < set->samples[i].weight)
+      {
+        maxi = set->samples[i].weight;
+        max_idx = i;
+      }
+      set->samples[i].weight /= total;
+      w_avg += set->samples[i].weight;
+    }
+    w_avg *= 1.0/set->sample_count;
+
+    ROS_INFO("total weight before normalization: %lf", total);
+    ROS_INFO("minimum weight before normalization: %lf at %d", mini, min_idx);
+    ROS_INFO("maximum weight before normalization: %lf at %d", maxi, max_idx);
+    ROS_INFO("average weight after normalization: %lf", w_avg);
+
     // Resample the particles
     if(!(++resample_count_ % resample_interval_) || 
         (force_publication ==true && sent_first_transform_ == false))
@@ -307,52 +330,24 @@ AismclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
       resample_function_(pf_);
       resampled = true;
     }
-    double accepted_rate =  (double)accepted_cloud.poses.size() / ((double)accepted_cloud.poses.size() + (double)rejected_cloud.poses.size());
-    ROS_DEBUG("Accepted chains: %ld", accepted_cloud.poses.size());
-    ROS_DEBUG("Accepted rate: %lf", accepted_rate);
+
+    //analyse some statistics
+    //XXX poses.size() cannot be zero
+    //double accepted_rate =  (double)accepted_cloud.poses.size() / ((double)accepted_cloud.poses.size() + (double)rejected_cloud.poses.size());
+    //ROS_DEBUG("Accepted chains: %ld", accepted_cloud.poses.size());
+    //ROS_DEBUG("Accepted rate: %lf", accepted_rate);
+    //particlecloud2_pub_.publish(accepted_cloud);
+    //particlecloud3_pub_.publish(rejected_cloud);
+
     ROS_DEBUG("Num samples: %d", pf_->sets[pf_->current_set].sample_count);
-    particlecloud2_pub_.publish(accepted_cloud);
-    particlecloud3_pub_.publish(rejected_cloud);
+
+    //update lasers_update
     lasers_update_[laser_index] = false;
     pf_odom_pose_ = pose;
     //Publish the resulting cloud
     if (!m_force_update) 
       MCL::publishParticleCloud(particlecloud_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
   }//endif(lasers_update_[laser_index])
-  else if(static_update_)
-  {
-    geometry_msgs::PoseArray accepted_cloud;
-    accepted_cloud.header.stamp = laser_scan->header.stamp;
-    accepted_cloud.header.frame_id = global_frame_id_;
-    geometry_msgs::PoseArray rejected_cloud;
-    rejected_cloud.header.stamp = laser_scan->header.stamp;
-    rejected_cloud.header.frame_id = global_frame_id_;
-    double total = demc::metropolisRejectAndCalculateWeight(ldata, ita_, kdt_.get(), demc_params_.get(), mapx_, mapy_, map_rng_x_, map_rng_y_, MCL::rng_, pf_, accepted_cloud, rejected_cloud);
-    if(version1_) 
-    {
-      MixmclNode::buildDensityTree(pf_, kdt_, loch_, orih_);
-      double w_avg = pf_normalize(pf_, total);
-    //TODO publish weighted particles to wpc_pub_
-      resample_function_(pf_);
-    }
-    //Publish the resulting cloud
-    if (!m_force_update) 
-      MCL::publishParticleCloud(particlecloud_pub_, global_frame_id_, laser_scan->header.stamp, pf_);
-    //TODO update cloud information without resampling
-    particlecloud2_pub_.publish(accepted_cloud);
-    particlecloud3_pub_.publish(rejected_cloud);
-    double accepted_rate =  (double)accepted_cloud.poses.size() / ((double)accepted_cloud.poses.size() + (double)rejected_cloud.poses.size());
-    ROS_DEBUG("Accepted chains: %ld", accepted_cloud.poses.size());
-    ROS_DEBUG("Accepted rate: %lf", accepted_rate);
-    ROS_DEBUG("Num samples: %d", pf_->sets[pf_->current_set].sample_count);
-    //TODO metropolis with same weights
-    //if(!(++resample_count_ % resample_interval_*10))
-    //{
-    //  ROS_DEBUG("Update cluster statistics.");
-    //  pf_update_without_resample(pf_);
-    //  resampled = true;
-    //}
-  }
   
   if(resampled || force_publication)
   {
@@ -494,3 +489,187 @@ AismclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   }
 }
 
+double AismclNode::AnnealedImportanceSampling(
+  amcl::AMCLLaserData& ldata, 
+  ais::ais_t* ais_params,
+  nuklei::KernelCollection* kdt,
+  demc::demc_t* demc_params,
+  std::pair<double, double> mapx,
+  std::pair<double, double> mapy,
+  double mapx_range,
+  double mapy_range,
+  random_numbers::RandomNumberGenerator rng,
+  pf_t* pf
+  //geometry_msgs::PoseArray& accepted_cloud,
+  //geometry_msgs::PoseArray& rejected_cloud)
+)
+{
+  //TODO how to monitor the statistic of particle weight?
+  assert(kdt!=NULL);
+  double log_uniform, log_alpha;
+  pf_sample_t* old_state;
+  pf_sample_t* new_state;
+  pf_sample_t* chain;
+  pf_vector_t vec_pose;
+  nuklei::kernel::se3 se3_pose;
+  //TODO ais_params->den_type == ais::density_t::logrithm
+  //TODO implements two classes for density_t::logrithm and density_t::uniform which inherit a base class with a virtual function
+  double inverse_iter_no_plus_one = 1.0/(1.0+ais_params->iter_num);
+  pf_sample_set_t* old_chains = pf->sets + pf->current_set;
+  pf_sample_set_t* new_chains = pf->sets + (pf->current_set + 1 )%2;
+  pf_sample_set_t* tmp_chains;
+  new_chains->sample_count = old_chains->sample_count;
+  std::vector<double> sum_log_bridging_weight(old_chains->sample_count);
+  std::vector<double> bridging_weight(old_chains->sample_count);
+  std::vector<double> predictive_belief_prob(old_chains->sample_count);//\phi_{0}
+  //std::vector<double> target_prob(old_chains->sample_count);//\phi_{M+1} is sample->likelihood or sample->logLikelihood
+  
+  //update measurement model for old_chains
+  //how to keep previous weight and data likelihood? Define pf_sample_t with preWeight and likelihood
+  //TODO when chain->likelihood and chain->logLikelihood should be normalized?
+  auto pair = ((amcl::AMCLLaser*)ldata.sensor)->UpdateSensorWithSet(old_chains, &ldata);
+  //cannot normalize at this point
+  //auto stat_tup = AismclNode::normalize_markov_chains(new_chains, pair.first, pair.second);
+  for(int i = 0 ; i < old_chains->sample_count ; ++i)
+  {
+    chain = old_chains->samples + i;
+    //initialize predictive_belief_prob
+    predictive_belief_prob[i] = chain->preWeight;
+    assert(predictive_belief_prob[i]>0);
+    //update sum_log_bridging_weight for each chain
+    sum_log_bridging_weight[i] = ( chain->logLikelihood - std::log(predictive_belief_prob[i]) )*inverse_iter_no_plus_one;
+    assert(std::isinf(sum_log_bridging_weight[i])==false);
+    bridging_weight[i] = std::pow( chain->likelihood/predictive_belief_prob[i], inverse_iter_no_plus_one);
+  }
+
+  double total_likelihood = 0.0;
+  for(int m = 1; m <= ais_params->iter_num; ++m)
+  {
+    //apply MCMC moves and store Markov chains in new_chains
+    demc::proposal(old_chains, demc_params, mapx, mapy, mapx_range, mapy_range, rng, new_chains);
+    //update measurement model for new_chains
+    auto pair = ((amcl::AMCLLaser*)ldata.sensor)->UpdateSensorWithSet(new_chains, &ldata);
+    //cannot normalize at this point
+    //auto stat_tup = AismclNode::normalize_markov_chains(new_chains, pair.first, pair.second);
+    for(int i = 0; i < new_chains->sample_count; ++i)
+    {
+      old_state = old_chains->samples + i;
+      new_state = new_chains->samples + i;
+
+      //update acceptance probability of old_state and new_state
+      //new_state is numerator old_state is denominator
+      log_alpha = new_state->logLikelihood - old_state->logLikelihood;
+      if(log_alpha < 0)
+        log_uniform = std::log(rng.uniform01());
+      else
+        log_uniform = 0;
+
+      //if accept new_state
+      if(log_uniform <= log_alpha)
+      {
+        //update density probability of pi for new_chains
+        MixmclNode::poseToSe3(new_state->pose, se3_pose);
+        //TODO Big problem: how to deal with zero probability
+        predictive_belief_prob[i] = kdt->evaluationAt(se3_pose);
+        assert(predictive_belief_prob[i]>0);
+      }
+      else 
+      {
+        new_state->pose = old_state->pose;
+        new_state->likelihood = old_state->likelihood;
+        new_state->logLikelihood = new_state->logLikelihood;
+        //Note that because predictive_belief_prob[i] is not updated by UpdateSensorWithSet function, the value remained in predictive_belief_prob
+      }
+      total_likelihood += new_state->likelihood;
+    }
+      //TODO likelihood have to be normalized before updating bridging_weight and sum_log_bridging_weight
+      //Note that logLikelihood cannot be normalized because it is used for updating log_alpha
+    for(int i = 0; i < new_chains->sample_count; ++i)
+    {
+      //update bridging weight
+      double state_likelihood = new_state->likelihood/total_likelihood;
+      bridging_weight[i] *= std::pow(state_likelihood/predictive_belief_prob[i],inverse_iter_no_plus_one);
+      sum_log_bridging_weight[i] += (std::log(state_likelihood) - std::log(predictive_belief_prob[i]))*inverse_iter_no_plus_one;
+      assert(std::isinf(sum_log_bridging_weight[i])==false);
+    }
+    //deprecate old_chains
+    //make new_chains old
+    pf->current_set = (pf->current_set + 1) % 2;
+    old_chains = pf->sets + pf->current_set;
+    new_chains = pf->sets + (pf->current_set + 1 )%2;
+  }
+
+  double total = 0.0;
+  int min_idx = 0,max_idx = 0;
+  double mini = old_chains->samples[0].weight;
+  double maxi = old_chains->samples[0].weight;
+  for(int i = 0 ; i < old_chains->sample_count ; ++i)
+  {
+    //old_chains->samples[i].weight = bridging_weight[i];
+    old_chains->samples[i].weight = exp(sum_log_bridging_weight[i]);
+    assert(old_chains->samples[i].weight>=0);
+    assert(std::isinf(old_chains->samples[i].weight)==false);
+    old_chains->samples[i].logWeight = sum_log_bridging_weight[i];
+    //if(old_chains->samples[i].weight <0)
+    //TODO assert |bridging_weight[i] - exp(sum_log_bridging_weight[i])| <= acceptable_error
+    total += old_chains->samples[i].weight;
+
+    //for debugging
+    if(maxi < old_chains->samples[i].weight)
+    {
+      maxi = old_chains->samples[i].weight;
+      max_idx = i;
+    }
+    if(mini > old_chains->samples[i].weight)
+    {
+      mini = old_chains->samples[i].weight;
+      min_idx = i;
+    }
+    //END for debugging
+
+  }
+
+  return total;
+}
+
+std::tuple<double,double,std::pair<double,double>,std::pair<double,double> > AismclNode::normalize_markov_chains(pf_sample_set_t* set, double total_weight, double total_likelihood)
+{
+  //The aim is to normalize weight, logWeight, likelihood and logLikelihood
+  int min_w_idx=0, max_w_idx=0,min_l_idx=0, max_l_idx=0;
+  double min_w=0.0, max_w=0.0, min_l=0.0, max_l=0.0;
+  double w_avg=0.0,l_avg=0.0;
+  for (int i = 0; i < set->sample_count; i++)
+  {
+    set->samples[i].weight /= total_weight;
+    set->samples[i].logWeight = log(set->samples[i].weight);
+    set->samples[i].likelihood /= total_likelihood;
+    set->samples[i].logLikelihood = log(set->samples[i].likelihood);
+
+    if(min_w > set->samples[i].weight || i==0)
+    {
+      min_w = set->samples[i].weight;
+      min_w_idx = i;
+    }
+    if(max_w < set->samples[i].weight || i==0)
+    {
+      max_w = set->samples[i].weight;
+      max_w_idx = i;
+    }
+    w_avg += set->samples[i].weight;
+
+    if(min_l > set->samples[i].likelihood || i==0)
+    {
+      min_l = set->samples[i].likelihood;
+      min_l_idx = i;
+    }
+    if(max_l < set->samples[i].likelihood || i==0)
+    {
+      max_l = set->samples[i].likelihood;
+      max_l_idx = i;
+    }
+    l_avg += set->samples[i].likelihood;
+  }
+  w_avg *= 1.0/set->sample_count;
+  l_avg *= 1.0/set->sample_count;
+  return std::make_tuple(w_avg,l_avg,std::make_pair(min_w_idx,max_w_idx),std::make_pair(min_l_idx, max_l_idx));
+}

@@ -5,8 +5,8 @@
  * @version 0.0.0
  * @date 2018-05-25
  */
-#ifndef MCMCLNODE_H
-#define MCMCLNODE_H
+#ifndef AISMCLNODE_H
+#define AISMCLNODE_H
 #include "mcl/MCL.h"
 #include "mixmcl/MixmclNode.h"
 #include "mixmcl/MCMCLConfig.h"
@@ -67,8 +67,6 @@ class AismclNode : public MCL<AismclNode>
     ros::Publisher particlecloud2_pub_;//for accepted cloud
     ros::Publisher particlecloud3_pub_;//for rejected cloud
     bool first_reconfigureCB2_call_;
-    bool version1_;
-    bool static_update_;
     dynamic_reconfigure::Server<mixmcl::MCMCLConfig> *dsrv2_;
     mixmcl::MCMCLConfig default_config2_;
     void reconfigureCB2(mixmcl::MCMCLConfig& config, uint32_t level);
@@ -78,6 +76,38 @@ class AismclNode : public MCL<AismclNode>
       ROS_INFO("loch: %f", loch_);
       ROS_INFO("orih: %f", orih_);
     };
+
+  /**
+   * @brief This function performs Annealed Importance Sampling incorporating with Metropolis-Hastings sampling methods.
+   *
+   * @param[in] ldata The object for measurement model
+   * @param[in] ais_params The object for AIS parameters
+   * @param[in] kdt The object for Kernel Density Estimation, if NULL, kdt is uniform distribution
+   * @param[in] demc_params The object for DEMC algorithm of MH method
+   * @param[in] mapx The minimum and maximum of x coordinate value of maps in meter
+   * @param[in] mapy The minimum and maximum of y coordinate value of maps in meter
+   * @param[in] mapx_range The difference of mapx, or width
+   * @param[in] mapy_range The difference of mapy, or length
+   * @param[in] rng The random number generator
+   * @param[in,out] pf The object of Particle Filter. We need the two particle sets
+   * @return[out] Total weight of output particles
+   */
+    static double AnnealedImportanceSampling(
+      amcl::AMCLLaserData& ldata, 
+      ais::ais_t* ais_params,
+      nuklei::KernelCollection* kdt,
+      demc::demc_t* demc_params,
+      std::pair<double, double> mapx,
+      std::pair<double, double> mapy,
+      double mapx_range,
+      double mapy_range,
+      random_numbers::RandomNumberGenerator rng,
+      pf_t* pf
+      //geometry_msgs::PoseArray& accepted_cloud,
+      //geometry_msgs::PoseArray& rejected_cloud)
+    );
+
+    static std::tuple<double,double,std::pair<double,double>,std::pair<double,double> > normalize_markov_chains(pf_sample_set_t* new_chains, double total_weight, double total_likelihood);
 };
 
-#endif//MCMCLNODE_H
+#endif//AISMCLNODE_H

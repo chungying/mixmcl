@@ -41,7 +41,7 @@ catkin_package(
     nav_msgs
     std_srvs
   INCLUDE_DIRS include
-  LIBRARIES mcl dualmcl_tool mixmcl_node amcl_node mcmcl_node markov_node
+  LIBRARIES mcl dualmcl_tool mixmcl_node amcl_node mcmcl_node markov_node aismcl_node
 )
 
 ##include dirrectories##
@@ -118,6 +118,17 @@ target_link_libraries(mcmcl_node
   mcl mixmcl_node
 )
 
+add_library(aismcl_node
+  src/aismcl/AismclNode.cpp
+)
+target_link_libraries(aismcl_node
+  ${amcl_modified_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
+  ${nuklei_LIBRARIES}
+  mcl mixmcl_node
+)
+
 add_library(dualmcl_tool
   #IO definition for recording robot poses and laser features
   src/io/paramio.cpp
@@ -174,6 +185,8 @@ target_link_libraries(kdtree_test
   ${catkin_LIBRARIES}
 )
 
+#TODO use a List of algorithm names and iterate add_executable for each of them.
+#TODO combie all source files into one library file
 add_executable(amcl
   src/amcl.cpp
 )
@@ -192,6 +205,17 @@ target_link_libraries(mcmcl
   ${Boost_LIBRARIES}
   ${catkin_LIBRARIES}
   mcl mcmcl_node
+)
+
+add_executable(aismcl
+  src/aismcl.cpp
+)
+target_link_libraries(aismcl
+  ${amcl_modified_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${catkin_LIBRARIES}
+  ${nuklei_LIBRARIES}
+  mcl mixmcl_node aismcl_node
 )
 
 add_executable(mixmcl

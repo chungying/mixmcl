@@ -122,8 +122,6 @@ void pf_update_resample_kld(pf_t* pf)
 
     sample_a = set_a->samples + i;
 
-    assert(sample_a->weight > 0);
-
     // Add sample to list
     sample_b->pose = sample_a->pose;
     
